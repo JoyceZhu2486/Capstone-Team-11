@@ -61,7 +61,7 @@ class Robot:
         if thetas.shape != (self.dof,):
             raise ValueError(f'Invalid thetas: Expected shape ({self.dof},), got {thetas.shape}.')
 
-        jacobians = np.zeros((3, self.dof, self.dof + 1))
+        jacobians = np.zeros((6, self.dof, self.dof + 1))
         epsilon = 0.001
 
         # --------------- BEGIN STUDENT SECTION ----------------------------------------
