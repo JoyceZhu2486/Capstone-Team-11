@@ -68,13 +68,15 @@ class Robot:
 
     def end_effector(self, thetas):
         """
-        Returns [x; y; z; roll; pitch; yaw] for the end effector given a set of joint angles.
+        Returns [x; y; z; roll; pitch; yaw] for the end effector 
+        given a set of joint angles.
 
         Parameters:
         thetas (np.ndarray): 1D array of joint angles.
 
         Returns:
-        np.ndarray: End-effector position and orientation in [x, y, z, roll, pitch, yaw] format.
+        np.ndarray: End-effector position and orientation 
+        in [x, y, z, roll, pitch, yaw] format.
         """
         # Get the frames for all joints and the end-effector
         frames = self.fk(thetas)
@@ -91,8 +93,48 @@ class Robot:
         yaw = np.arctan2(H_0_ee[1, 0], H_0_ee[0, 0])
 
         return np.array([x, y, z, roll, pitch, yaw])
-        
-    
+
+    def frame_to_workspace(self, frame):
+        """
+        Compute workspace variables given a frame.
+
+        Parameters
+        ----------
+        frame : np.array[4, 4]
+            the transformation frame 
+
+        Returns
+        -------
+        array: workspace variables
+            in [x, y, z, roll, pitch, yaw] format.
+
+        """
+        # obtain x, y, z
+        x = frame[0, 3]
+        y = frame[1, 3]
+        z = frame[2, 3]
+        # calculate pitch, roll, yaw
+        # Check if we are in a gimbal lock position
+        if abs(frame[2, 0]) != 1:
+            # Normal case
+            pitch = -np.arcsin(frame[2, 0])
+            roll = np.arctan2(frame[2, 1], 
+                                frame[2, 2])
+            yaw = np.arctan2(frame[1, 0], 
+                                frame[0, 0])
+        else:
+            # Gimbal lock case
+            yaw = 0  # Set yaw to zero in the gimbal lock case
+            if frame[2, 0] == -1:
+                pitch = np.pi / 2
+                roll = np.arctan2(frame[0, 1], 
+                                    frame[0, 2])
+            else:
+                pitch = -np.pi / 2
+                roll = np.arctan2(-frame[0, 1], 
+                                    -frame[0, 2])
+        return [x, y, z, roll, pitch, yaw]
+
     def jacobians(self, thetas):
         """
         Compute the Jacobians for each frame.
@@ -121,7 +163,32 @@ class Robot:
         # - Compute numerical derivatives for x, y, and positions.
         # - Determine the rotational component based on joint contributions.
 
-        raise NotImplementedError("Implement jacobians")
+        # for each joint change
+        for i in range(self.dof):
+            thetas_less = thetas
+            thetas_less[i] = thetas_less[i] - epsilon
+            frames_less = self.forward_kinematics(thetas_less)
+
+            thetas_more = thetas
+            thetas_more[i] = thetas_more[i] + epsilon
+            frames_more = self.forward_kinematics(thetas_more)
+
+            # for each frame
+            for j in range(self.dof+1):
+                # computer the change in x, y, z, roll, pitch, yaw
+                [x_l, y_l, z_l, roll_l, pitch_l, yaw_l] = \
+                    self.frame_to_workspace(frames_less[:, :, j])
+                [x_m, y_m, z_m, roll_m, pitch_m, yaw_m] = \
+                    self.frame_to_workspace(frames_more[:, :, j])
+    
+                jacobians[0][i][j] = (x_m     - x_l    ) / epsilon
+                jacobians[1][i][j] = (y_m     - y_l    ) / epsilon
+                jacobians[2][i][j] = (z_m     - z_l    ) / epsilon
+                jacobians[3][i][j] = (roll_m  - roll_l ) / epsilon
+                jacobians[4][i][j] = (pitch_m - pitch_l) / epsilon
+                jacobians[5][i][j] = (yaw_m   - yaw_l  ) / epsilon
+        
+        return jacobians
         # --------------- END STUDENT SECTION --------------------------------------------
     
     
