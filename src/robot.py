@@ -10,7 +10,16 @@ class Robot:
     def __init__(self):
         """Initialize motion planner with robot controller"""
         self.dof = 7
-    
+
+    def dh_transformation(self, a, alpha, d, theta):
+        """Compute the individual transformation matrix using DH parameters."""
+        return np.array([
+            [np.cos(theta), -np.sin(theta) * np.cos(alpha), np.sin(theta) * np.sin(alpha), a * np.cos(theta)],
+            [np.sin(theta), np.cos(theta) * np.cos(alpha), -np.cos(theta) * np.sin(alpha), a * np.sin(theta)],
+            [0, np.sin(alpha), np.cos(alpha), d],
+            [0, 0, 0, 1]
+        ])
+        
     def forward_kinematcis(self, dh_parameters, thetas):
         """
         Compute foward kinematics
@@ -40,8 +49,18 @@ class Robot:
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO
         frames = np.zeros((4, 4, len(dh_parameters)+1))
+        end_effector_pose = np.eye(4)
+        for i in range(self.dof):
+            a, alpha, d, _ = dh_parameters[i]
+            theta = thetas[i]
+            
+            # Compute the individual transformation matrix for each joint
+            transform = self.dh_transformation(a, alpha, d, theta)
+            
+            # Multiply the cumulative transformation by this joint's transformation
+            end_effector_pose = np.dot(end_effector_pose, transform)
         
-        raise NotImplementedError("Implement forward kinematics")
+        return end_effector_pose
         # --------------- END STUDENT SECTION --------------------------------------------------
     
     def jacobians(self, thetas):
