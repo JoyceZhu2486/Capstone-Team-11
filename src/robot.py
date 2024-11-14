@@ -72,6 +72,37 @@ class Robot:
         # - Compute numerical derivatives for x, y, and positions.
         # - Determine the rotational component based on joint contributions.
 
+        # for each joint change
+        for i in range(self.dof):
+            thetas_less = thetas
+            thetas_less[i] = thetas_less[i] - epsilon
+            frames_less = self.forward_kinematics(thetas_less)
+            
+            thetas_more = thetas
+            thetas_more[i] = thetas_more[i] + epsilon
+            frames_more = self.forward_kinematics(thetas_more)
+
+            # for each frame
+            for j in range(self.dof+1):
+                # computer the change in x, y, z, \theta, \phi, \psi
+                x_less = frames_less[:, :, j][0, 2]
+                y_less = frames_less[:, :, j][1, 2]
+                z_less = frames_less[:, :, j][2, 2]
+                th_less = np.arctan2(frames_less[:, :, j][1, 0],
+                                     frames_less[:, :, j][0, 0])
+                
+                
+
+                x_more = frames_more[:, :, j][0, 2]
+                y_more = frames_more[:, :, j][1, 2]
+                z_more = frames_more[:, :, j][2, 2]
+                th_more = np.arctan2(frames_more[:, :, j][1, 0],
+                                     frames_more[:, :, j][0, 0])
+                
+                jacobians[0][i][j] = (x_more-x_less)/(epsilon)
+                jacobians[1][i][j] = (y_more-y_less)/(epsilon)
+                jacobians[2][i][j] = (th_more-th_less)/(epsilon)
+        # Your code ends here
         raise NotImplementedError("Implement jacobians")
         # --------------- END STUDENT SECTION --------------------------------------------
     
