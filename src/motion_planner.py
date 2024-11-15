@@ -220,7 +220,7 @@ class TrajectoryGenerator:
 
         # Time available for acceleration/deceleration (assuming symmetric)
         t_total = duration
-        t_ramp = t_total / 2
+        t_ramp = t_total / 4
 
         # Compute per-joint required acceleration and peak velocity
         for j in range(num_joints):
