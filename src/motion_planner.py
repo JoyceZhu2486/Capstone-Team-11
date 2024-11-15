@@ -10,6 +10,34 @@ class TrajectoryGenerator:
         self.dt = dt
         self.max_vel = RobotConfig.MAX_VELOCITY
         self.max_acc = RobotConfig.MAX_ACCELERATION
+    
+    def generate_pose_waypoints(self, start_pose, end_pose, duration):
+        """
+        Generate a pose trajectory as a series of waypoints using linear interpolation.
+        
+        This method calculates waypoints at regular intervals over the specified duration
+        to create a linear motion from the starting pose to the ending pose. Each waypoint
+        is a pose object.
+
+        Parameters
+        ----------
+        start_pose : RigidTransform
+            The starting pose of the trajectory, including position and orientation.
+        end_pose : RigidTransform
+            The ending pose of the trajectory, including position and orientation.
+        duration : float
+            The total time over which the trajectory should be executed.
+
+        Returns
+        -------
+        list of Poses
+            A list of poses representing the waypoints of the trajectory.
+            Each waypoint is spaced at an interval of 20ms, as defined by `self.dt`.
+
+        """
+        num_points = duration/0.02
+        pose_trajectory = np.linspace(start_pose, end_pose, num_points).T
+        return pose_trajectory
 
     def generate_cartesian_waypoints(self, start_pose, end_pose, duration):
         """
