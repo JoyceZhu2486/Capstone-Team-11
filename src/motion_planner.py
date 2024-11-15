@@ -191,7 +191,99 @@ class TrajectoryGenerator:
         - Calculate proper acceleration time
         - Ensure smooth transitions between phases
         """
-        raise NotImplementedError("Implement trapezoidal trajectory generation")
+def trajectory_trap_vel(waypoints, times, frequency, duty_cycle):
+    """
+    Returns a matrix of joint angles, where each column represents a single
+    timestamp. These joint angles form trapezoidal velocity trajectory segments,
+    hitting waypoints[:, i] at times[i].
+
+    Args:
+    waypoints (np.array): Matrix of waypoints; each column represents a single
+                          waypoint in joint space, and each row represents a particular joint.
+    times (np.array): Row vector that indicates the time each of the waypoints should
+                      be reached. The number of columns should equal the number of waypoints,
+                      and should be monotonically increasing.
+    frequency (float): The control frequency at which this trajectory should be played,
+                       and therefore the number of columns per second of playback.
+    duty_cycle (float): The duty cycle for the trapezoidal velocity profile.
+
+    Returns:
+    np.array: Matrix of joint angles forming the trajectory.
+    """
+    
+    # Number of joints
+    num_joints = waypoints.shape[0]
+    # Number of waypoints
+    num_waypoints = waypoints.shape[1]
+    # Number of segments between waypoints
+    num_segments = num_waypoints - 1
+
+    if times.shape != (1, num_waypoints):
+        raise ValueError('Size of times vector is incorrect!')
+
+    if num_waypoints < 2:
+        raise ValueError('Insufficient number of waypoints.')
+
+    if not isinstance(frequency, (int, float)) or frequency < 5:
+        raise ValueError('Invalid control frequency (must be at least 5Hz)')
+
+    if duty_cycle < 0 or duty_cycle > 0.5:
+        raise ValueError('Invalid duty cycle!')
+
+    # Calculate number of points per segment
+    num_points_per_segment = []
+    for segment in range(num_segments):
+        dt = times[0, segment + 1] - times[0, segment]
+        num_points_per_segment.append(int(dt * frequency))
+
+    # Pre-allocate trajectory matrix
+    trajectory = np.zeros((num_joints, int(np.sum(num_points_per_segment))))
+
+    # Fill in trajectory segment-by-segment
+    segment_start_point = 0
+    for segment in range(num_segments):
+        points_in_segment = num_points_per_segment[segment]
+        segment_end_point = segment_start_point + points_in_segment
+
+        num_ramp_points = int(duty_cycle * points_in_segment)
+        ramp_time = (times[0, segment + 1] - times[0, segment]) * duty_cycle
+
+        # --------------- BEGIN STUDENT SECTION ----------------------------------
+        # TODO: Calculate the maximum velocity for this segment
+        total_time = times[0, segment + 1] - times[0, segment]
+        duty_time = total_time - ramp_time
+        vm = (waypoints[:,segment+1] - waypoints[:,segment])/duty_time
+
+        # TODO: Fill in the points for this segment of the trajectory
+        # You need to implement the trapezoidal velocity profile here
+        # Hint: Use three phases: ramp up, constant velocity, and ramp down
+
+        # Example structure (you need to fill in the correct calculations):
+        for joint in range(num_joints):
+            q0 = waypoints[joint, segment]
+            qf = waypoints[joint, segment + 1]
+            v_max = vm[joint]
+
+            for i in range(points_in_segment):
+                t = i / frequency
+                if i < num_ramp_points:
+                    # TODO: Implement ramp up phase
+                    q = q0 + 0.5 * (v_max / ramp_time) * t ** 2
+                elif i >= points_in_segment - num_ramp_points:
+                    # TODO: Implement ramp down phase
+                    q = qf - 0.5 * (v_max / ramp_time) * (total_time-t) ** 2
+                else:
+                    # TODO: Implement constant velocity phase
+                    q_ramp_up = q0 + 0.5 * v_max * ramp_time
+                    q = q_ramp_up + v_max * (t - ramp_time)
+
+                trajectory[joint, segment_start_point + i] = q
+
+        # --------------- END STUDENT SECTION ------------------------------------
+
+        segment_start_point += points_in_segment
+
+    return trajectory
 
     def interpolate_trajectory(self, times, trajectory):
         """
