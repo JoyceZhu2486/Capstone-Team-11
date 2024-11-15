@@ -11,7 +11,7 @@ class TrajectoryGenerator:
         self.max_vel = RobotConfig.MAX_VELOCITY
         self.max_acc = RobotConfig.MAX_ACCELERATION
     
-    def generate_pose_waypoints(self, start_pose, end_pose, duration):
+    def generate_joint_waypoints(self, start_pose, end_pose, duration):
         """
         Generate a pose trajectory as a series of waypoints using linear interpolation.
         
@@ -36,8 +36,8 @@ class TrajectoryGenerator:
 
         """
         num_points = duration/0.02
-        pose_trajectory = np.linspace(start_pose, end_pose, num_points).T
-        return pose_trajectory
+        joint_trajectory = np.linspace(start_pose, end_pose, num_points).T
+        return joint_trajectory
 
     def generate_cartesian_waypoints(self, start_pose, end_pose, duration):
         """
