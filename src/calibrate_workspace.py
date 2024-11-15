@@ -2,6 +2,9 @@ from frankapy import FrankaArm
 import numpy as np
 from autolab_core import RigidTransform
 
+pen_positions = None
+whiteboard_pose = None
+drop_pose = None
 class WorkspaceCalibrator:
     def __init__(self):
         self.fa = FrankaArm()
