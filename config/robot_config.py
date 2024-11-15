@@ -3,7 +3,7 @@ import numpy as np
 
 class RobotConfig:
     """Robot-specific configuration parameters"""
-    
+    "My first time using github"
     # Robot joint configurations
     HOME_JOINTS = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
     SAFE_JOINTS = [0, -0.4, 0, -2.0, 0, 1.57, 0.785]
