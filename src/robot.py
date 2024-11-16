@@ -7,9 +7,10 @@ from robot_config import RobotConfig
 from task_config import TaskConfig
 
 class Robot:
-    def __init__(self):
+    def __init__(self,arm):
         """Initialize motion planner with robot controller"""
         self.dof = 7
+        self.arm = arm
 
     def dh_transformation(self, a, alpha, d, theta):
         """Compute the individual transformation matrix using DH parameters."""

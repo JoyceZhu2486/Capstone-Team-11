@@ -35,8 +35,12 @@ class TrajectoryGenerator:
             Each waypoint is spaced at an interval of 20ms, as defined by `self.dt`.
 
         """
-        num_points = duration/0.02
-        joint_trajectory = np.linspace(start_joint, end_joint, num_points).T
+        print("start joint:")
+        print(start_joint)
+        print("end joint:")
+        print(end_joint)
+        num_points = int(duration/0.02) + 1
+        joint_trajectory = np.linspace(start_joint, end_joint, int(num_points))
         return joint_trajectory
 
     def generate_cartesian_waypoints(self, start_pose, end_pose, duration):
@@ -220,7 +224,7 @@ class TrajectoryGenerator:
 
         # Time available for acceleration/deceleration (assuming symmetric)
         t_total = duration
-        t_ramp = t_total / 2
+        t_ramp = t_total / 4
 
         # Compute per-joint required acceleration and peak velocity
         for j in range(num_joints):
