@@ -1,9 +1,19 @@
 import sys
 sys.path.append("../config")
 
+import sys
+sys.path.append("../config")
+
 import numpy as np
 from autolab_core import RigidTransform
 from robot_config import RobotConfig
+from frankapy import FrankaArm
+from frankapy import FrankaArm, SensorDataMessageType
+from frankapy import FrankaConstants as FC
+from franka_interface_msgs.msg import SensorDataGroup
+from frankapy.proto_utils import sensor_proto2ros_msg, make_sensor_group_msg
+from frankapy.proto import JointPositionSensorMessage, ShouldTerminateSensorMessage
+import rospy
 
 class TrajectoryGenerator:
     def __init__(self, dt=0.02):
@@ -293,9 +303,9 @@ class TrajectoryGenerator:
         raise NotImplementedError("Implement trajectory interpolation")
 
 class TrajectoryFollower:
-    def __init__(self, robot_controller):
-        self.robot = robot_controller
+    def __init__(self):
         self.dt = 0.02  # Required 20ms control loop
+        self.fa = FrankaArm()
         
     def follow_joint_trajectory(self, joint_trajectory):
         """
@@ -308,24 +318,38 @@ class TrajectoryFollower:
         joint_trajectory : np.ndarray
             Array of shape (N, 7) containing joint angles for each timestep
         """
-        # Interpolate trajectory to match control rate
-        times = np.linspace(0, len(joint_trajectory) * self.dt, len(joint_trajectory))
-        joint_trajectory_interp = self.interpolate_trajectory(times, joint_trajectory)
-        
-        # Execute trajectory using dynamic control
-        self.robot.arm.goto_joints(
-            joints=joint_trajectory_interp[0],  # Initial joint position
-            dynamic=True,
-            buffer_time=len(joint_trajectory_interp) * self.dt
-        )
-        
-        for joints in joint_trajectory_interp[1:]:
-            self.robot.arm.goto_joints(
-                joints=joints,
-                duration=self.dt,
-                dynamic=True,
-                buffer_time=self.dt
+        rospy.loginfo('Initializing Sensor Publisher')
+        pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=1000)
+        rate = rospy.Rate(1 / self.dt)
+
+        rospy.loginfo('Publishing joints trajectory...')
+        # To ensure skill doesn't end before completing trajectory, make the buffer time much longer than needed
+        self.fa.goto_joints(joint_trajectory[0], duration=1000, dynamic=True, buffer_time=10)
+        init_time = rospy.Time.now().to_time()
+        for i in range(1, joint_trajectory.shape[0]):
+            traj_gen_proto_msg = JointPositionSensorMessage(
+                id=i, timestamp=rospy.Time.now().to_time() - init_time, 
+                joints=joint_trajectory[i]
             )
+            ros_msg = make_sensor_group_msg(
+                trajectory_generator_sensor_msg=sensor_proto2ros_msg(
+                    traj_gen_proto_msg, SensorDataMessageType.JOINT_POSITION)
+            )
+            
+            rospy.loginfo('Publishing: ID {}'.format(traj_gen_proto_msg.id))
+            pub.publish(ros_msg)
+            rate.sleep()
+
+        # Stop the skill
+        # Alternatively can call fa.stop_skill()
+        term_proto_msg = ShouldTerminateSensorMessage(timestamp=rospy.Time.now().to_time() - init_time, should_terminate=True)
+        ros_msg = make_sensor_group_msg(
+            termination_handler_sensor_msg=sensor_proto2ros_msg(
+                term_proto_msg, SensorDataMessageType.SHOULD_TERMINATE)
+            )
+        pub.publish(ros_msg)
+
+        rospy.loginfo('Done')
             
     def follow_cartesian_trajectory(self, pose_trajectory):
         """
