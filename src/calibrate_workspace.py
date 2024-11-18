@@ -8,7 +8,7 @@ drop_pose = None
 class WorkspaceCalibrator:
     def __init__(self):
         self.fa = FrankaArm()
-        self.duration = 30
+        self.duration = 15
         
     def calibrate_pen_holders(self):
         """Calibrate pen holder positions through guided movement"""
@@ -64,7 +64,7 @@ class WorkspaceCalibrator:
         np.save("whiteboard_pose.npy", whiteboard_pose)
         print(f"Recorded whiteboard at: {whiteboard_pose}")
         
-        return current_pose
+        return current_pose, current_joint
     
     def calibrate_drop_location(self):
         """Calibrate pen drop location"""
