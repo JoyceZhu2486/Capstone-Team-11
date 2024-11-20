@@ -235,5 +235,41 @@ class Robot:
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics
 
-        raise NotImplementedError("Implement inverse kinematics")
-        # --------------- END STUDENT SECTION --------------------------------------------------
+        #  Motion planning parameters
+        ##PATH_RESOLUTION = 0.01  # meters
+        
+        # Step size for gradient update
+        step_size = 0.1
+
+        ##IK_TOLERANCE = 1e-3#
+
+        num_iter = 0
+
+        # Run gradient descent optimization
+        while num_iter < TaskConfig.IK_MAX_ITERATIONS:
+            # TODO:[x, y, z, roll, pitch, yaw] Check if this is the right type for target_pose
+            
+            cost_gradient = np.zeros(self.dof)
+            # Compute the current end effector pose
+            FK = self.end_effector(thetas)
+            # Compute the difference between current pose and goal
+            d = FK - target_pose
+            # Compute the Jacobian
+            J = self.jacobians(thetas)[:, :, -1]
+            
+            # Compute the cost gradient
+            cost_gradient = np.dot(J.T, d)
+
+            thetas = thetas - step_size * cost_gradient
+
+            # Check stopping condition, and return if it is met.
+
+            if np.linalg.norm(cost_gradient) < TaskConfig.IK_TOLERANCE :
+                return thetas
+
+            num_iter += 1
+
+        
+        return thetas
+
+    
