@@ -377,3 +377,4 @@ class TrajectoryFollower:
             
         # Execute trajectory
         self.follow_joint_trajectory(np.array(joint_trajectory))
+
