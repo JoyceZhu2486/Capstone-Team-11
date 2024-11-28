@@ -49,6 +49,7 @@ if __name__ == '__main__':
     drop_pose = calibrator.calibrate_drop_location()
     drop_joints = arm.get_joints()
     arm.open_gripper()
+    print(whiteboard_joints)
 
 
 
@@ -69,6 +70,7 @@ if __name__ == '__main__':
                                             pen_joints, pickup_duration)
     tf.follow_joint_trajectory(pickup_joint_waypoints)
     time.sleep(0.5)
+    
 
     # close gripper to pickup pen:
     arm.close_gripper()
@@ -82,6 +84,7 @@ if __name__ == '__main__':
     to_board_joint_waypoints = tg.generate_joint_waypoints(arm.get_joints(),
                                         whiteboard_joints, to_board_duration)# weird, it seems like it can't move tothe designated position
     tf.follow_joint_trajectory(to_board_joint_waypoints)
+    print(arm.get_joints)
     time.sleep(0.5)
 
 else:
@@ -92,4 +95,3 @@ args.foo = 2
 args.bar = 3
 
 # Call the program with passed arguments
-
