@@ -7,117 +7,18 @@ from robot_config import RobotConfig
 from task_config import TaskConfig
 
 class Robot:
-    def __init__(self,arm):
+    def __init__(self):
         """Initialize motion planner with robot controller"""
         self.dof = 7
-        self.arm = arm
-
-    def dh_transformation(self, a, alpha, d, theta):
-        """Compute the individual transformation matrix using DH parameters."""
-        Rot_x_alpha = np.array([
-            [1, 0, 0, 0],
-            [0, np.cos(alpha), -np.sin(alpha), 0],
-            [0, np.sin(alpha), np.cos(alpha), 0],
-            [0, 0, 0, 1]
-        ])
-
-        Trans_x_a = np.array([
-            [1, 0, 0, a],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]
-        ])
-
-        Trans_z_d = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, d],
-            [0, 0, 0, 1]
-        ])
-
-        Rot_z_theta = np.array([
-            [np.cos(theta), -np.sin(theta), 0, 0],
-            [np.sin(theta), np.cos(theta), 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]
-        ])
-
-        #T_joint = Rot_z_theta @ Trans_z_d @ Trans_x_a @ Rot_x_alpha
-        T_joint = Rot_x_alpha@ Trans_x_a @ Trans_z_d @ Rot_z_theta 
-        return T_joint
-
-    def forward_kinematcis(self, dh_parameters, thetas):
-        """
-        Compute foward kinematics
-        
-        Your implementation should:
-        1. Compute transformation matrices for each frame using DH parameters
-        2. Compute end-effector pose
-        
-        Parameters
-        ----------
-        dh_parameters: np.ndarray
-            DH parameters (you can choose to apply the offset to the tool flange or the pen tip)
-        thetas : np.ndarray
-            All joint angles
-            
-        Returns
-        -------
-        np.ndarray
-            End-effector pose
-        """
-        if thetas.ndim != 1:
-            raise ValueError('Expecting a 1D array of joint angles.')
-
-        if thetas.shape[0] != self.dof:
-            raise ValueError(f'Invalid number of joints: {thetas.shape[0]} found, expecting {self.dof}')
-        
-        # --------------- BEGIN STUDENT SECTION ------------------------------------------------
-        # TODO
-        # Initialize frames array: 4x4 transformation matrices for all frames
-        frames = np.zeros((4, 4, len(dh_parameters) + 1))
-        frames[..., 0] = np.eye(4)  # Base frame (identity matrix)
-
-        end_effector_pose = np.eye(4)
-
-        for i in range(len(dh_parameters)):
-            a, alpha, d, theta_offset = dh_parameters[i]
-            if(i == 7): theta = theta_offset
-            else: theta = thetas[i] + theta_offset  # Add the offset to the joint angle
-            
-            # Compute the individual transformation matrix for each joint
-            T_joint = self.dh_transformation(a, alpha, d, theta)
-            
-            # Store the current transformation in frames
-            frames[..., i + 1] = frames[..., i] @ T_joint
-        
-        return frames
-        # --------------- END STUDENT SECTION --------------------------------------------------
-
-    def end_effector(self, dh_parameters, thetas):
-        """
-        Compute the end-effector pose and convert it into workspace configuration.
-
-        Parameters
-        ----------
-        dh_parameters: np.ndarray
-            DH parameters, where each row is [a, alpha, d, theta_offset].
-        thetas: np.ndarray
-            Joint angles for the robot.
-
-        Returns
-        -------
-        np.ndarray
-            Workspace configuration of the end-effector in [x, y, z, roll, pitch, yaw] format.
-        """
-        # Compute forward kinematics to get the end-effector frame
-        end_effector_frame = self.forward_kinematcis(dh_parameters, thetas)[..., -1]
-        
-        # Convert the end-effector frame to workspace configuration
-        workspace_configuration = self.frame_to_workspace(end_effector_frame)
-        
-        return np.array(workspace_configuration)
-
+        self.fa = FrankaArm()
+        self.dh_parameters = np.array([[0      , 0       , 0.333, 0],
+                                       [0      , -np.pi/2, 0    , 0],
+                                       [0      ,  np.pi/2, 0.316, 0],
+                                       [0.0825 ,  np.pi/2, 0    , 0],
+                                       [-0.0825, -np.pi/2, 0.384, 0],
+                                       [0      ,  np.pi/2, 0    , 0],
+                                       [0.088  ,  np.pi/2, 0    , 0],
+                                       [0      , 0       , 0.107, 0]])
 
     def frame_to_workspace(self, frame):
         """
@@ -159,6 +60,110 @@ class Robot:
                 roll = np.arctan2(-frame[0, 1], 
                                     -frame[0, 2])
         return [x, y, z, roll, pitch, yaw]
+
+    def dh_transformation(self, a, alpha, d, theta):
+        """Compute the individual transformation matrix using DH parameters."""
+        Rot_x_alpha = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(alpha), -np.sin(alpha), 0],
+            [0, np.sin(alpha), np.cos(alpha), 0],
+            [0, 0, 0, 1]
+        ])
+
+        Trans_x_a = np.array([
+            [1, 0, 0, a],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        Trans_z_d = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, d],
+            [0, 0, 0, 1]
+        ])
+
+        Rot_z_theta = np.array([
+            [np.cos(theta), -np.sin(theta), 0, 0],
+            [np.sin(theta), np.cos(theta), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        #T_joint = Rot_z_theta @ Trans_z_d @ Trans_x_a @ Rot_x_alpha
+        T_joint = Rot_x_alpha@ Trans_x_a @ Trans_z_d @ Rot_z_theta 
+        return T_joint
+
+    def forward_kinematcis(self, thetas):
+        """
+        Compute foward kinematics
+        
+        Your implementation should:
+        1. Compute transformation matrices for each frame using DH parameters
+        2. Compute end-effector pose
+        
+        Parameters
+        ----------
+        self.dh_parameters: np.ndarray
+            DH parameters (you can choose to apply the offset to the tool flange or the pen tip)
+        thetas : np.ndarray
+            All joint angles
+            
+        Returns
+        -------
+        np.ndarray
+            End-effector pose
+        """
+        if thetas.ndim != 1:
+            raise ValueError('Expecting a 1D array of joint angles.')
+
+        if thetas.shape[0] != self.dof:
+            raise ValueError(f'Invalid number of joints: {thetas.shape[0]} found, expecting {self.dof}')
+        
+        # --------------- BEGIN STUDENT SECTION ------------------------------------------------
+        # TODO
+        # Initialize frames array: 4x4 transformation matrices for all frames
+        frames = np.zeros((4, 4, len(self.dh_parameters) + 1))
+        frames[..., 0] = np.eye(4)  # Base frame (identity matrix)
+
+        for i in range(len(self.dh_parameters)):
+            a, alpha, d, theta_offset = self.dh_parameters[i]
+            if(i == 7): theta = theta_offset
+            else: theta = thetas[i] + theta_offset  # Add the offset to the joint angle
+            
+            # Compute the individual transformation matrix for each joint
+            T_joint = self.dh_transformation(a, alpha, d, theta)
+            
+            # Store the current transformation in frames
+            frames[..., i + 1] = frames[..., i] @ T_joint
+        
+        return frames
+        # --------------- END STUDENT SECTION --------------------------------------------------
+
+    def end_effector(self, thetas):
+        """
+        Compute the end-effector pose and convert it into workspace configuration.
+
+        Parameters
+        ----------
+        self.dh_parameters: np.ndarray
+            DH parameters, where each row is [a, alpha, d, theta_offset].
+        thetas: np.ndarray
+            Joint angles for the robot.
+
+        Returns
+        -------
+        np.ndarray
+            Workspace configuration of the end-effector in [x, y, z, roll, pitch, yaw] format.
+        """
+        # Compute forward kinematics to get the end-effector frame
+        end_effector_frame = self.forward_kinematcis(thetas)[..., -1]
+        
+        # Convert the end-effector frame to workspace configuration
+        workspace_configuration = self.frame_to_workspace(end_effector_frame)
+        
+        return np.array(workspace_configuration)
 
     def jacobians(self, thetas):
         """
@@ -217,7 +222,7 @@ class Robot:
         # --------------- END STUDENT SECTION --------------------------------------------
     
     
-    def _inverse_kinematics(self, target_pose, seed_joints):
+    def _inverse_kinematics(self, target_pose, seed_joints = None):
         """
         Compute inverse kinematics using Jacobian pseudo-inverse method.
         
@@ -254,7 +259,7 @@ class Robot:
             raise ValueError('Invalid target_pose: Expected RigidTransform.')
         
         if seed_joints is None:
-            seed_joints = self.robot.arm.get_joints()
+            seed_joints = self.fa.get_joints()
         
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics

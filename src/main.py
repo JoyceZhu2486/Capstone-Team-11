@@ -20,11 +20,11 @@ if __name__ == '__main__':
     
     # for checkpoint
 
-    arm = FrankaArm()
+    fa = FrankaArm()
 
     # calibrate
     calibrator = WorkspaceCalibrator()
-    arm.open_gripper()
+    fa.open_gripper()
 
     # end-effector frame at pen position relative to the base frame
     pen_pos = np.load("pen_holder_pose.npy", allow_pickle=True)
@@ -40,24 +40,24 @@ if __name__ == '__main__':
 
     # Perform calibration
     pen_positions = calibrator.calibrate_pen_holders()
-    pen_joints = arm.get_joints()
-    arm.close_gripper()
+    pen_joints = fa.get_joints()
+    fa.close_gripper()
     
     whiteboard_pose = calibrator.calibrate_whiteboard()
-    whiteboard_joints = arm.get_joints()
+    whiteboard_joints = fa.get_joints()
 
     drop_pose = calibrator.calibrate_drop_location()
-    drop_joints = arm.get_joints()
-    arm.open_gripper()
+    drop_joints = fa.get_joints()
+    fa.open_gripper()
     print(whiteboard_joints)
 
 
 
     # initialize
     print("Moving to home position...")
-    arm.reset_joints()
-    arm.open_gripper()
-    robot = Robot(arm)
+    fa.reset_joints()
+    fa.open_gripper()
+    robot = Robot()
     tg = TrajectoryGenerator()
     tf = TrajectoryFollower()
     
@@ -65,15 +65,15 @@ if __name__ == '__main__':
     # go to the position to pickup pen:
     print("Moving to pen pickup position")
     pickup_duration = 5
-    print(arm.get_pose())
-    pickup_joint_waypoints = tg.generate_joint_waypoints(arm.get_joints(),
+    print(fa.get_pose())
+    pickup_joint_waypoints = tg.generate_joint_waypoints(fa.get_joints(),
                                             pen_joints, pickup_duration)
     tf.follow_joint_trajectory(pickup_joint_waypoints)
     time.sleep(0.5)
     
 
     # close gripper to pickup pen:
-    arm.close_gripper()
+    fa.close_gripper()
     time.sleep(0.5)
 
 
@@ -81,10 +81,10 @@ if __name__ == '__main__':
    
 
     to_board_duration = 5
-    to_board_joint_waypoints = tg.generate_joint_waypoints(arm.get_joints(),
+    to_board_joint_waypoints = tg.generate_joint_waypoints(fa.get_joints(),
                                         whiteboard_joints, to_board_duration)# weird, it seems like it can't move tothe designated position
     tf.follow_joint_trajectory(to_board_joint_waypoints)
-    print(arm.get_joints)
+    print(fa.get_joints)
     time.sleep(0.5)
 
 else:

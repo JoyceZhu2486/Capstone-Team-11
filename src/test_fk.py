@@ -9,18 +9,18 @@ import math
 
 def main():
     
-    dh_parameters = np.array(  [[0,0,0.333,0],
-                                [0,-math.pi/2,0,0],
-                                [0,math.pi/2,0.316,0],
-                                [0.0825,math.pi/2,0,0],
-                                [-0.0825,-math.pi/2,0.384,0],
-                                [0,math.pi/2,0,0],
-                                [0.088,math.pi/2,0,0],
-                                [0,0,0.107,0]])
+    dh_parameters = np.array(  [[0      , 0         , 0.333, 0],
+                                [0      , -math.pi/2, 0    , 0],
+                                [0      ,  math.pi/2, 0.316, 0],
+                                [0.0825 ,  math.pi/2, 0    , 0],
+                                [-0.0825, -math.pi/2, 0.384, 0],
+                                [0      ,  math.pi/2, 0    , 0],
+                                [0.088  ,  math.pi/2, 0    , 0],
+                                [0      , 0         , 0.107, 0]])
 
 
     fa = FrankaArm()
-    robot = Robot(fa)
+    robot = Robot()
     time.sleep(0.5)
 
     fa.reset_joints()
