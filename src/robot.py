@@ -42,9 +42,9 @@ class Robot:
             [0, 0, 0, 1]
         ])
 
-        T_joint = Rot_z_theta @ Trans_z_d @ Trans_x_a @ Rot_x_alpha
-        T = T @ T_joint
-        return T
+        #T_joint = Rot_z_theta @ Trans_z_d @ Trans_x_a @ Rot_x_alpha
+        T_joint = Rot_x_alpha@ Trans_x_a @ Trans_z_d @ Rot_z_theta 
+        return T_joint
 
     def forward_kinematcis(self, dh_parameters, thetas):
         """
@@ -82,7 +82,8 @@ class Robot:
 
         for i in range(len(dh_parameters)):
             a, alpha, d, theta_offset = dh_parameters[i]
-            theta = thetas[i] + theta_offset  # Add the offset to the joint angle
+            if(i == 7): theta = theta_offset
+            else: theta = thetas[i] + theta_offset  # Add the offset to the joint angle
             
             # Compute the individual transformation matrix for each joint
             T_joint = self.dh_transformation(a, alpha, d, theta)
