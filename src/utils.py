@@ -14,7 +14,7 @@ def _slerp(self, q0, q1, t):
     s1 = np.sin(t*theta) / sin_theta
     return s0*q0 + s1*q1
         
-def _rotation_to_quaternion(self, R):
+def _rotation_to_quaternion(R):
     """Convert rotation matrix to quaternion"""
     tr = np.trace(R)
     if tr > 0:
