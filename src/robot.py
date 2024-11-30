@@ -55,8 +55,6 @@ class Robot:
         ])
 
 
-        # print(T_joint)
-        # print()
         return T_joint
 
     def forward_kinematcis(self, dh_parameters, thetas):
@@ -88,14 +86,16 @@ class Robot:
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO
         # Initialize frames array: 4x4 transformation matrices for all frames
-        frames = np.zeros((4, 4, len(dh_parameters)))
+        frames = np.zeros((4, 4, len(dh_parameters)+1))
         frames[..., 0] = np.eye(4)  # Base frame (identity matrix)
 
         end_effector_pose = np.eye(4)
 
-        for i in range(len(dh_parameters)-1):
+        for i in range(len(dh_parameters)):
             a, alpha, d, theta_offset = dh_parameters[i]
-            theta = thetas[i] + theta_offset  # Add the offset to the joint angle
+            if i==7: theta = 0
+            else:
+                theta = thetas[i] + theta_offset  # Add the offset to the joint angle
             
             # Compute the individual transformation matrix for each joint
             T_joint = self.dh_transformation(a, alpha, d, theta)
@@ -103,15 +103,8 @@ class Robot:
             # Store the current transformation in frames
             frames[..., i + 1] = frames[..., i] @ T_joint
 
-        flange = np.array([
-                        [1,0,0,0],
-                        [0,1,0,0],
-                        [0,0,1,0.107],
-                        [0,0,0,1]])
 
-        end_effector_pose = frames[...,-1]@flange
-
-        return frames, end_effector_pose
+        return frames
         # --------------- END STUDENT SECTION --------------------------------------------------
 
     def end_effector(self, dh_parameters, thetas):
