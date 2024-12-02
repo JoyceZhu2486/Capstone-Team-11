@@ -19,22 +19,31 @@ def main():
     # fa.goto_joints(q_pre_pick, use_impedance=False, dynamic=False)
     real_pose = fa.get_pose()
     real_joints = fa.get_joints()
-    frames = robot.forward_kinematics(real_joints)
-    
-    fk_pprevious_pose = frames[...,-4]
-    fk_previous_pose = frames[...,-3]
-    fk_pose_without_flange = frames[...,-2]
-    fk_pose_with_flange = frames[...,-1]
 
     print("real pose:\n", real_pose)
     print("real pose translation :\n", real_pose.translation)
     print("real pose rotation:\n", real_pose.rotation)
 
+    frames = robot.forward_kinematics(real_joints)
+    fk_ee = frames[...,-1]
+
     calculated_joints = robot._inverse_kinematics(real_pose, real_joints,True)
     print("calculated_joints",calculated_joints)
     #fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
     print("real_joints",real_joints)
-   
+    print("-----------------------------------")
+    print("frame with flange and offset: \n", fk_ee)
+
+    calculated_frames = robot.forward_kinematics(calculated_joints)
+    fk_ee_calculated = frames[...,-1]
+    print("-----------------------------------")
+    print("frame with flange and offset: \n", fk_ee_calculated)
+
+
+
+    # fk_pprevious_pose = frames[...,-4]
+    # fk_previous_pose = frames[...,-3]
+    # fk_pose_without_flange = frames[...,-2]
 
     # print("real pose:\n", real_pose)
     # print("real joints:\n", real_joints)
@@ -56,15 +65,15 @@ def main():
     # print("last joint without flange\n", fk_previous_pose)
     # print("-----------------------------------")
     # print("frame with flange: \n", fk_pose_with_flange)
-    print("-----------------------------------")
-    print("frame with flange and offset: \n", fk_pose_with_flange)
+    # print("-----------------------------------")
+    # print("frame with flange and offset: \n", fk_pose_with_flange)
 
-    frames = robot.forward_kinematics(calculated_joints)
-    fk_pose_without_flange = frames[...,-2]
-    fk_pose_with_flange = frames[...,-1]
+    # frames = robot.forward_kinematics(calculated_joints)
+    # fk_pose_without_flange = frames[...,-2]
+    # fk_pose_with_flange = frames[...,-1]
     
-    print("-----------------------------------")
-    print("frame with flange and offset: \n", fk_pose_with_flange)
+    # print("-----------------------------------")
+    # print("frame with flange and offset: \n", fk_pose_with_flange)
 
     # qua = _rotation_to_quaternion(fk_pose_without_flange[:3,:3])
     # # print("quaternion:\n", qua)

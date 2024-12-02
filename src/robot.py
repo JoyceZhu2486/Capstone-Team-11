@@ -223,7 +223,7 @@ class Robot:
             frames_more = self.forward_kinematics(thetas_more)
 
             # for each frame
-            for j in range(self.dof+1):
+            for j in range(len(frames_less)):
                 # computer the change in x, y, z, roll, pitch, yaw
                 [x_l, y_l, z_l, roll_l, pitch_l, yaw_l] = \
                     self.frame_to_workspace(frames_less[:, :, j])
