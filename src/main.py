@@ -10,6 +10,11 @@ from calibrate_workspace import *
 from motion_planner import *
 from utils  import *
 
+
+def pos_to_matrix():
+    pass
+
+
 # Define default values
 parser = argparse.ArgumentParser()
 parser.add_argument('--foo', default=1, type=float, help='foo')
@@ -18,74 +23,78 @@ parser.add_argument('--foo', default=1, type=float, help='foo')
 if __name__ == '__main__':
     args = parser.parse_args()  # get arguments from command line
     
-    # for checkpoint
-
-    arm = FrankaArm()
-
-    # calibrate
-    calibrator = WorkspaceCalibrator()
-    arm.open_gripper()
-
-    # end-effector frame at pen position relative to the base frame
-    pen_pos = np.load("pen_holder_pose.npy", allow_pickle=True)
-    print(pen_pos)
-
-    # end-effector frame at center of whiteboard relative to the base frame
-    center_pos = np.load("whiteboard_pose.npy", allow_pickle=True)
-    print(center_pos)
-
-    # end-effector frame at drop bin relative to the base frame
-    drop_pos = np.load("drop_bin_pose.npy", allow_pickle=True)
-    print(drop_pos)
-
-    # Perform calibration
-    pen_positions = calibrator.calibrate_pen_holders()
-    pen_joints = arm.get_joints()
-    arm.close_gripper()
-    
-    whiteboard_pose = calibrator.calibrate_whiteboard()
-    whiteboard_joints = arm.get_joints()
-
-    drop_pose = calibrator.calibrate_drop_location()
-    drop_joints = arm.get_joints()
-    arm.open_gripper()
-    print(whiteboard_joints)
-
-
-
     # initialize
-    print("Moving to home position...")
-    arm.reset_joints()
-    arm.open_gripper()
-    robot = Robot(arm)
     tg = TrajectoryGenerator()
     tf = TrajectoryFollower()
-    
-    
+    arm = FrankaArm()
+    robot = Robot(arm)
+    input("Press Enter to open gripper and reset joints")
+    arm.open_gripper()
+    arm.reset_joints()
+
+    # calibrate
+    calibrator = WorkspaceCalibrator() 
+    pen_pos = calibrator.calibrate_pen_holders()
+    # pen_joints = arm.get_joints()
+    arm.close_gripper()
+    whiteboard_pos = calibrator.calibrate_whiteboard()
+    # whiteboard_joints = arm.get_joints()
+    drop_pos = calibrator.calibrate_drop_location()
+    arm.open_gripper()
+    # drop_joints = arm.get_joints()
+    # print(whiteboard_joints)
+
+    pen_pos = np.load("pen_holder_pose.npy", allow_pickle=True)
+    whiteboard_pos = np.load("whiteboard_pose.npy", allow_pickle=True)
+    drop_pos = np.load("drop_bin_pose.npy", allow_pickle=True)
+    pen_pos_matrix = pos_to_matrix(pen_pos)
+    whiteboard_pos_matrix = pos_to_matrix(whiteboard_pos)
+    drop_pos_matrix = pos_to_matrix(drop_pos)
+
+    # move back to home position
+    print("Moving back to home position...")
+    arm.reset_joints()
+    arm.open_gripper()
+    home_position = arm.get_joints()
+
     # go to the position to pickup pen:
     print("Moving to pen pickup position")
     pickup_duration = 5
-    print(arm.get_pose())
-    pickup_joint_waypoints = tg.generate_joint_waypoints(arm.get_joints(),
+    pen_joints = robot._inverse_kinematics(pen_pos_matrix, home_position)
+    pickup_joint_waypoints = tg.generate_joint_waypoints(home_position,
                                             pen_joints, pickup_duration)
     tf.follow_joint_trajectory(pickup_joint_waypoints)
-    time.sleep(0.5)
-    
 
     # close gripper to pickup pen:
+    print("Closing gripper")
     arm.close_gripper()
-    time.sleep(0.5)
 
+    # move pen above the pen holder
+    print("Moving pen vertically")
+    pen_above_matrix = pen_pos_matrix
+    above_offset = 10
+    pen_above_matrix[2][3] = pen_above_matrix[2][3] + above_offset
+    pen_above_joints = robot._inverse_kinematics(pen_above_matrix, home_position)
 
-    # move pen to the random position on white board
-   
-
+    # move from the above pen holder position to home position of whiteboard
+    print("Moving to whiteboard")
     to_board_duration = 5
-    to_board_joint_waypoints = tg.generate_joint_waypoints(arm.get_joints(),
-                                        whiteboard_joints, to_board_duration)# weird, it seems like it can't move tothe designated position
+    whiteboard_joints = robot._inverse_kinematics(whiteboard_pos_matrix, pen_above_joints)
+    to_board_joint_waypoints = tg.generate_joint_waypoints(pen_above_joints,
+                                        whiteboard_joints, to_board_duration)
     tf.follow_joint_trajectory(to_board_joint_waypoints)
-    print(arm.get_joints)
-    time.sleep(0.5)
+
+    # TODO: draw line 
+    # TODO: draw curve
+    cur_joints = pen_above_joints
+
+    # move to drop position
+    print("Moving to drop position")
+    to_drop_duration = 5
+    drop_joints = robot._inverse_kinematics(drop_pos_matrix, cur_joints)
+    to_drop_joint_waypoints = tg.generate_joint_waypoints(cur_joints,
+                                            drop_joints, to_drop_duration)
+    tf.follow_joint_trajectory(to_drop_joint_waypoints) 
 
 else:
     args = parser.parse_args('')  # get default arguments
@@ -95,3 +104,5 @@ args.foo = 2
 args.bar = 3
 
 # Call the program with passed arguments
+
+main.py

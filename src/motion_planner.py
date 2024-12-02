@@ -53,49 +53,55 @@ class TrajectoryGenerator:
         joint_trajectory = np.linspace(start_joint, end_joint, int(num_points))
         return joint_trajectory
 
-    def generate_cartesian_waypoints(self, start_pose, end_pose, duration):
+    def generate_cartesian_waypoints(self, start_pose, end_pose, duration, current_joint):
         """
-        Generate a Cartesian trajectory as a series of waypoints using linear interpolation 
-        for position and Spherical Linear Interpolation (SLERP) for orientation.
-        
-        This method calculates waypoints at regular intervals over the specified duration
-        to create a smooth motion from the starting pose to the ending pose. Each waypoint
-        includes both position and orientation data, ensuring that the trajectory is not only
-        spatially accurate but also maintains correct alignment throughout the movement.
+        Time-parameterize Cartesian trajectory with trapezoidal velocity profile.
 
         Parameters
         ----------
-        start_pose : RigidTransform
-            The starting pose of the trajectory, including position and orientation.
-        end_pose : RigidTransform
-            The ending pose of the trajectory, including position and orientation.
-        duration : float
-            The total time over which the trajectory should be executed.
-
+        cartesian_trajectory : array_like
+            Array of poses representing path in Cartesian space
+        
         Returns
-        -------
-        list of RigidTransform
-            A list of RigidTransform objects representing the waypoints of the trajectory.
-            Each waypoint is spaced at an interval of 20ms, as defined by `self.dt`.
+        ------- 
+        array_like
+            Time-parameterized trajectory with 20ms spacing
 
-        Notes
-        -----
-        - Waypoints are calculated at 20ms intervals.
-        - Linear interpolation is used for the translational component of the trajectory.
-        - SLERP is utilized for the rotational component to ensure smooth transitions between orientations.
-        - The trajectory generation assumes constant velocity, which may not be suitable for all applications
-        where acceleration and deceleration phases are required.
+        Raises
+        ------
+        NotImplementedError
+            This function needs to be implemented.
 
         Hints
         -----
-        - The number of points, `n_points`, is determined by the duration divided by the timestep `self.dt`.
-        - Use `np.linspace` to generate times from 0 to `duration` for the waypoints.
-        - For position, interpolate linearly between `start_pose.translation` and `end_pose.translation`.
-        - For rotation, convert rotation matrices to quaternions and use SLERP from `q0` to `q1`.
-        - Ensure each waypoint is constructed with the interpolated position and orientation and respects
-        the frame specifications of the `start_pose`.
+        Key Requirements:  
+        - Timing: Waypoints must be spaced exactly 20ms apart for controller
+        - Safety: Stay within MAX_VELOCITY and MAX_ACCELERATION limits
+        - Smoothness: Use trapezoidal velocity profile for acceleration/deceleration
+
+        Implementation:
+        - Calculate duration based on path length and velocity limits
+        - Generate trapezoidal velocity profile with acceleration limits 
+        - Ensure 20ms spacing between waypoints
+        - For rotations: Use SLERP to interpolate between orientations
         """
-        raise NotImplementedError("Implement cartesian waypoints generation")
+        # Number of waypoints
+        n_points = int(duration / self.dt) + 1
+        # Time steps
+        times = np.linspace(0, duration, n_points)
+        # Initialize list of waypoints
+        cartesian_trap = self.generate_trapezoidal_trajectory(start_pose, end_pose, max_vel, max_acc, duration)
+        # Assume start_pose and end_pose are arrays containing x,y,z
+        waypoints = np.zeros(len(cartesian_trap))
+        waypoints[0] = current_joint
+
+        for i in range(len(cartesian_trap)):
+            robot = Robot()
+            if(i != 0):
+                waypoints[i] = robot._inverse_kinematics(cartesian_trap[i], waypoints[i-1])
+                
+        return waypoints
+            
     
     def generate_straight_line(self, start_point, end_point, duration=None):
         """
@@ -238,15 +244,15 @@ class TrajectoryGenerator:
 
         # Compute per-joint required acceleration and peak velocity
         for j in range(num_joints):
-            # Required acceleration
-            a_j[j] = (4 * dist[j]) / (t_total ** 2)
-            if a_j[j] > max_acc:
-                raise ValueError(f"Required acceleration for joint {j} exceeds max_acc.")
             
             # Peak velocity
-            v_peak_j[j] = a_j[j] * t_ramp
+            v_peak_j[j] = dist[j]/ (t_total - t_ramp)
             if v_peak_j[j] > max_vel:
                 raise ValueError(f"Peak velocity for joint {j} exceeds max_vel.")
+            # Required acceleration
+            a_j[j] = v_peak_j[j]/t_ramp
+            if a_j[j] > max_acc:
+                raise ValueError(f"Required acceleration for joint {j} exceeds max_acc.")
             
             # Positions at key times
             q_j_t_ramp[j] = q_start[j] + 0.5 * a_j[j] * t_ramp ** 2 * sign[j]

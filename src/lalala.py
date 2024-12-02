@@ -1,0 +1,10 @@
+import numpy as np
+whiteboard_pos = np.load("whiteboard_pose.npy")
+print(whiteboard_pos)
+print()
+drop_bin_pos = np.load("drop_bin_pose.npy")
+print(drop_bin_pos)
+print()
+pen_holder_pos = np.load("pen_holder_pose.npy")
+print(pen_holder_pos)
+print()

@@ -5,12 +5,22 @@ from frankapy import FrankaArm
 from autolab_core import RigidTransform
 from robot_config import RobotConfig
 from task_config import TaskConfig
+from scipy.spatial.transform import Rotation as R
 
 class Robot:
     def __init__(self,arm):
         """Initialize motion planner with robot controller"""
         self.dof = 7
         self.arm = arm
+        self.dh_parameters = np.array( [[0,0,0.333,0],
+                                        [0,-np.pi/2,0,0],
+                                        [0,np.pi/2,0.316,0],
+                                        [0.0825,np.pi/2,0,0],
+                                        [-0.0825,-np.pi/2,0.384,0],
+                                        [0,np.pi/2,0,0],
+                                        [0.088,np.pi/2,0,0],
+                                        [0,0,0.107,0],
+                                        [0,0,0.1034,0]])
 
     def dh_transformation(self, a, alpha, d, theta):
         """Compute the individual transformation matrix using DH parameters."""
@@ -57,7 +67,7 @@ class Robot:
 
         return T_joint
 
-    def forward_kinematcis(self, dh_parameters, thetas):
+    def forward_kinematics(self, thetas):
         """
         Compute foward kinematics
         
@@ -86,14 +96,14 @@ class Robot:
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO
         # Initialize frames array: 4x4 transformation matrices for all frames
-        frames = np.zeros((4, 4, len(dh_parameters)+1))
+        frames = np.zeros((4, 4, len(self.dh_parameters)+1))
         frames[..., 0] = np.eye(4)  # Base frame (identity matrix)
 
         end_effector_pose = np.eye(4)
 
-        for i in range(len(dh_parameters)):
-            a, alpha, d, theta_offset = dh_parameters[i]
-            if i==7: theta = 0
+        for i in range(len(self.dh_parameters)):
+            a, alpha, d, theta_offset = self.dh_parameters[i]
+            if i>=7: theta = 0
             else:
                 theta = thetas[i] + theta_offset  # Add the offset to the joint angle
             
@@ -107,7 +117,7 @@ class Robot:
         return frames
         # --------------- END STUDENT SECTION --------------------------------------------------
 
-    def end_effector(self, dh_parameters, thetas):
+    def end_effector(self, thetas):
         """
         Compute the end-effector pose and convert it into workspace configuration.
 
@@ -124,7 +134,7 @@ class Robot:
             Workspace configuration of the end-effector in [x, y, z, roll, pitch, yaw] format.
         """
         # Compute forward kinematics to get the end-effector frame
-        end_effector_frame, _ = self.forward_kinematcis(dh_parameters, thetas)
+        end_effector_frame = self.forward_kinematics(thetas)
         end_effector_frame = end_effector_frame[...,-1]
         
         # Convert the end-effector frame to workspace configuration
@@ -231,7 +241,7 @@ class Robot:
         # --------------- END STUDENT SECTION --------------------------------------------
     
     
-    def _inverse_kinematics(self, target_pose, seed_joints):
+    def _inverse_kinematics(self, target_pose, thetas, method):
         """
         Compute inverse kinematics using Jacobian pseudo-inverse method.
         
@@ -262,16 +272,78 @@ class Robot:
         - The iteration parameters are defined in RobotConfig and TaskConfig
         """
         
-        if seed_joints.shape != (self.dof):
+        if thetas.shape[0] != (self.dof):
             raise ValueError(f'Invalid initial_thetas: Expected shape ({self.dof},), got {seed_joints.shape}.')
         if type(target_pose) != RigidTransform:
             raise ValueError('Invalid target_pose: Expected RigidTransform.')
         
-        if seed_joints is None:
-            seed_joints = self.robot.arm.get_joints()
-        
+        if thetas is None:
+            thetas = self.fa.get_joints()
+
+
+        transfer_matrix = np.eye(4)
+        for i in range(3):
+            for j in range(3):
+                transfer_matrix[i][j] = target_pose.rotation[i][j]
+            transfer_matrix[i][3] = target_pose.translation[i]
+        #print("transfer_matrix:",transfer_matrix)
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics
+        #  Motion planning parameters
+        ##PATH_RESOLUTION = 0.01  # meters
+        
+        # Step size for gradient update
+        step_size = 0.01
 
-        raise NotImplementedError("Implement inverse kinematics")
-        # --------------- END STUDENT SECTION --------------------------------------------------
+        ##IK_TOLERANCE = 1e-3#
+        
+        num_iter = 0
+        
+
+        # Run gradient descent optimization
+        while num_iter < TaskConfig.IK_MAX_ITERATIONS:
+            # TODO:[x, y, z, roll, pitch, yaw] Check if this is the right type for target_pose
+            
+            cost_gradient = np.zeros(self.dof)
+            # Compute the current end effector pose
+            if (method):#this method should work
+                hfk = self.forward_kinematics(thetas)[:,:,-1]
+                rfk = hfk[:3,:3]
+                rtp = transfer_matrix[:3,:3]
+                axisR = rfk.T @ rtp
+                robj = R.from_matrix(axisR)
+                rotvec = robj.as_rotvec()# in the world frame/the frame rfk and rtp referenced to
+                print("rotvec", rotvec)
+                print("(transfer_matrix-hfk)[:3,-1]", (transfer_matrix-hfk)[:3,-1])
+                #might need to change theta to row pitch yaw convention, by reverse the sequence
+                #rotvec = rotvec[::-1] 
+                #print("(ntransfer_matrix-hfk)[:3,-1]", (transfer_matrix-hfk)[:3,-1])
+                #print("rotv", rotvec)
+                d = np.concatenate(((transfer_matrix-hfk)[:3,-1], rotvec))
+                print("d", d)
+
+            else:#this might also work
+                FK = self.end_effector(thetas)
+                TP = self.end_effector(transfer_matrix)
+                # Compute the difference between current pose and goal
+                d = FK - TP
+
+            # Compute the Jacobian
+            J = self.jacobians(thetas)[:, :, -1]
+            # Compute the cost gradient
+            cost_gradient = np.dot(J.T, d)
+            #print("cost_gradient ",cost_gradient )
+            thetas = thetas - step_size * cost_gradient
+            for theta in thetas:
+                if abs(theta)>= 2*np.pi:
+                    theta += -np.sign(theta)*2*np.pi
+            # Check stopping condition, and return if it is met.
+            #print("np.linalg.norm(cost_gradient)",np.linalg.norm(cost_gradient))
+            if np.linalg.norm(cost_gradient) < TaskConfig.IK_TOLERANCE :
+                print("Reached")
+                return thetas
+
+            num_iter += 1
+
+        print("Reached Max Iteration")
+        return thetas
