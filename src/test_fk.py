@@ -26,20 +26,22 @@ def main():
 
     frames = robot.forward_kinematics(real_joints)
     fk_ee = frames[...,-1]
+    ee_variables = robot.end_effector(real_joints)
+    print("calculated pose:\n", fk_ee)
+    print("calculated_end_effector\n", ee_variables)
+    print("-----------------------------------")
 
-    calculated_joints = robot._inverse_kinematics(real_pose, real_joints,True)
-    print("calculated_joints",calculated_joints)
+    calculated_joints = robot._inverse_kinematics(real_pose, real_joints, True)
     #fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
     print("real_joints",real_joints)
-    print("-----------------------------------")
+    print("calculated_joints",calculated_joints)
     print("frame with flange and offset: \n", fk_ee)
+    print("-----------------------------------")
 
     calculated_frames = robot.forward_kinematics(calculated_joints)
     fk_ee_calculated = frames[...,-1]
-    print("-----------------------------------")
     print("frame with flange and offset: \n", fk_ee_calculated)
-
-
+    print("-----------------------------------")
 
     # fk_pprevious_pose = frames[...,-4]
     # fk_previous_pose = frames[...,-3]
