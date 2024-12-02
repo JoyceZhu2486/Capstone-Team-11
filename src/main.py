@@ -27,7 +27,7 @@ if __name__ == '__main__':
     tg = TrajectoryGenerator()
     tf = TrajectoryFollower()
     arm = FrankaArm()
-    robot = Robot(arm)
+    robot = Robot()
     input("Press Enter to open gripper and reset joints")
     arm.open_gripper()
     arm.reset_joints()

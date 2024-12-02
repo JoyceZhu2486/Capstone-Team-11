@@ -8,10 +8,10 @@ from task_config import TaskConfig
 from scipy.spatial.transform import Rotation as R
 
 class Robot:
-    def __init__(self,arm):
+    def __init__(self):
         """Initialize motion planner with robot controller"""
         self.dof = 7
-        self.arm = arm
+        self.arm = FrankaArm()
         self.dh_parameters = np.array( [[0,0,0.333,0],
                                         [0,-np.pi/2,0,0],
                                         [0,np.pi/2,0.316,0],
@@ -202,7 +202,7 @@ class Robot:
             raise ValueError(f'Invalid thetas: Expected shape ({self.dof},), got {thetas.shape}.')
 
         jacobians = np.zeros((6, self.dof, self.dof + 1))
-        epsilon = 0.001
+        epsilon = 0.00001
 
         # --------------- BEGIN STUDENT SECTION ----------------------------------------
         # TODO: Implement the numerical computation of the Jacobians
@@ -297,7 +297,7 @@ class Robot:
 
         ##IK_TOLERANCE = 1e-3#
         
-        num_iter = 0
+        num_iter = 10
         
 
         # Run gradient descent optimization

@@ -8,20 +8,9 @@ import numpy as np
 from utils import *
 
 def main():
-    
-    dh_parameters = np.array(  [[0,0,0.333,0],
-                                [0,-np.pi/2,0,0],
-                                [0,np.pi/2,0.316,0],
-                                [0.0825,np.pi/2,0,0],
-                                [-0.0825,-np.pi/2,0.384,0],
-                                [0,np.pi/2,0,0],
-                                [0.088,np.pi/2,0,0],
-                                [0,0,0.107,0],
-                                [0,0,0.1034,0]])
-
 
     fa = FrankaArm()
-    robot = Robot(fa)
+    robot = Robot()
     time.sleep(0.5)
 
     fa.reset_joints()
@@ -63,10 +52,10 @@ def main():
     # print("5 frame: \n", frames[...,-5])
     # print("-----------------------------------")
     # print("6 frame: \n", fk_pprevious_pose)
-    print("-----------------------------------")
-    print("last joint without flange\n", fk_previous_pose)
-    print("-----------------------------------")
-    print("frame with flange: \n", fk_pose_with_flange)
+    # print("-----------------------------------")
+    # print("last joint without flange\n", fk_previous_pose)
+    # print("-----------------------------------")
+    # print("frame with flange: \n", fk_pose_with_flange)
     print("-----------------------------------")
     print("frame with flange and offset: \n", fk_pose_with_flange)
 
