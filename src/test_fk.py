@@ -32,7 +32,7 @@ def main():
     print("-----------------------------------")
 
     calculated_joints = robot._inverse_kinematics(real_pose, real_joints, True)
-    #fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
+    # fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
     print("real_joints",real_joints)
     print("calculated_joints",calculated_joints)
     print("frame with flange and offset: \n", fk_ee)
@@ -42,6 +42,32 @@ def main():
     fk_ee_calculated = frames[...,-1]
     print("frame with flange and offset: \n", fk_ee_calculated)
     print("-----------------------------------")
+    print("-----------------------------------")
+    print("-----------------------------------")
+
+    fa.open_gripper()
+    pen_holder_pos = np.load("pen_holder_pose.npy")
+    print("pen holder pos:\n", pen_holder_pos)
+    pen_holder_target = fk_ee
+    pen_holder_target[0][3] = pen_holder_pos[0]
+    pen_holder_target[1][3] = pen_holder_pos[1]
+    pen_holder_target[2][3] = pen_holder_pos[2]
+    print("pen holder target:\n", pen_holder_target)
+    print("-----------------------------------")
+
+    calculated_joints = robot._inverse_kinematics(pen_holder_target, real_joints, True)
+    
+    print("calculated_joints",calculated_joints)
+
+    calculated_frames = robot.forward_kinematics(calculated_joints)
+    fk_ee_calculated = frames[...,-1]
+    print("End effecter from calculated ik: \n", fk_ee_calculated)
+    print("-----------------------------------")
+
+    input("press Enter to go to joint position")
+    fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
+    fa.close_gripper()
+    
 
     # fk_pprevious_pose = frames[...,-4]
     # fk_previous_pose = frames[...,-3]
