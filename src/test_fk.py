@@ -45,21 +45,32 @@ def main():
     print("-----------------------------------")
     print("-----------------------------------")
 
+    # calibrate
     fa.open_gripper()
+    calibrator = WorkspaceCalibrator() 
+    pen_pos = calibrator.calibrate_pen_holders()
+    pen_real_joints = fa.get_joints()
+    pose2 = fa.get_pose()
+    input("Press Enter to open gripper and reset joints")
+    fa.open_gripper()
+    fa.reset_joints()
+
     pen_holder_pos = np.load("pen_holder_pose.npy")
     print("pen holder pos:\n", pen_holder_pos)
     pen_holder_target = fk_ee
     pen_holder_target[0][3] = pen_holder_pos[0]
     pen_holder_target[1][3] = pen_holder_pos[1]
     pen_holder_target[2][3] = pen_holder_pos[2]
+    
     print("pen holder target:\n", pen_holder_target)
     print("-----------------------------------")
 
-    calculated_joints = robot._inverse_kinematics(pen_holder_target, real_joints, True)
+    pen_holder_joints = robot._inverse_kinematics(pose2, real_joints, True)
     
-    print("calculated_joints",calculated_joints)
+    print("pen holder real joints",pen_real_joints)
+    print("calculated_joints",pen_holder_joints)
 
-    calculated_frames = robot.forward_kinematics(calculated_joints)
+    calculated_frames = robot.forward_kinematics(pen_holder_joints)
     fk_ee_calculated = frames[...,-1]
     print("End effecter from calculated ik: \n", fk_ee_calculated)
     print("-----------------------------------")

@@ -202,7 +202,7 @@ class Robot:
             raise ValueError(f'Invalid thetas: Expected shape ({self.dof},), got {thetas.shape}.')
 
         jacobians = np.zeros((6, self.dof, self.dof + 1))
-        epsilon = 0.00001
+        epsilon = 1
 
         # --------------- BEGIN STUDENT SECTION ----------------------------------------
         # TODO: Implement the numerical computation of the Jacobians
@@ -221,7 +221,7 @@ class Robot:
             thetas_more = thetas
             thetas_more[i] = thetas_more[i] + epsilon
             frames_more = self.forward_kinematics(thetas_more)
-
+            frames = np.zeros((4, 4, len(self.dh_parameters)+1))
             # for each frame
             for j in range(len(frames_less)):
                 # computer the change in x, y, z, roll, pitch, yaw
@@ -241,6 +241,73 @@ class Robot:
         # --------------- END STUDENT SECTION --------------------------------------------
     
     
+    def analy_jacobian (self, thetas):
+        """
+        Compute the Jacobians for each frame.
+
+        Parameters
+        ----------
+        thetas : np.ndarray
+            All joint angles
+            
+        Returns
+        -------
+        np.ndarray
+            Jacobians
+        """
+        #frames = np.zeros((4, 4, len(self.dh_parameters)+1)) 10 frames
+        Hs = self.forward_kinematics(thetas)
+        on = Hs[:3,3,-1]
+        print("Hs[:,:,-1]", Hs[:,:,-1])
+        print("on", on)
+        Jv = np.zeros((3, self.dof))  # Linear velocity part
+        Jw = np.zeros((3, self.dof))  # Angular velocity part
+        # for each joint change
+        for i in range(self.dof):
+            if(i == self.dof -1):
+                o = on - Hs[:3,3,self.dof -2]
+                z = Hs[:3,2,-1]
+            else:
+                o = on - Hs[:3,3,i]
+                z = Hs[:3,2,i]
+            Jv[:,i] = np.cross(z, o)
+            Jw[:,i] = z
+
+        J = np.vstack((Jv,Jw))
+        
+        return J
+        # n = self.dof
+
+        # if thetas.ndim != 1:
+        #     raise ValueError('Expecting a 1D array of joint angles.')
+
+        # if thetas.shape[0] != n:
+        #     raise ValueError(f'Invalid number of joints: {thetas.shape[0]} found, expecting {n}')
+
+        # # Initialize lists for z axes and origins
+        # z = [np.array([0, 0, 1])]  # z0 axis
+        # o = [np.array([0, 0, 0])]  # o0 origin
+
+        # # Compute forward kinematics to get transformations
+        # frames = self.forward_kinematics(thetas)
+        # T = [frames[..., i] for i in range(frames.shape[2])]
+
+        # for i in range(1, len(T)):
+        #     z.append(T[i][:3, 2])
+        #     o.append(T[i][:3, 3])
+
+        # # Compute Jacobian
+        # J = np.zeros((6, n))
+        # o_n = o[-1]  # Position of the end-effector
+
+        # for i in range(n):
+        #     Jp = np.cross(z[i], (o_n - o[i]))
+        #     Jo = z[i]
+        #     J[:3, i] = Jp
+        #     J[3:, i] = Jo
+
+        # return J
+
     def _inverse_kinematics(self, target_pose, thetas, method):
         """
         Compute inverse kinematics using Jacobian pseudo-inverse method.
@@ -274,18 +341,19 @@ class Robot:
         
         if thetas.shape[0] != (self.dof):
             raise ValueError(f'Invalid initial_thetas: Expected shape ({self.dof},), got {seed_joints.shape}.')
-        if type(target_pose) != RigidTransform:
-            raise ValueError('Invalid target_pose: Expected RigidTransform.')
-        
+        if type(target_pose) == RigidTransform:
+            # raise ValueError('Invalid target_pose: Expected RigidTransform.')
+            transfer_matrix = np.eye(4)
+            for i in range(3):
+                for j in range(3):
+                    transfer_matrix[i][j] = target_pose.rotation[i][j]
+                transfer_matrix[i][3] = target_pose.translation[i]
+        else:
+            transfer_matrix = target_pose
+
         if thetas is None:
             thetas = self.fa.get_joints()
 
-
-        transfer_matrix = np.eye(4)
-        for i in range(3):
-            for j in range(3):
-                transfer_matrix[i][j] = target_pose.rotation[i][j]
-            transfer_matrix[i][3] = target_pose.translation[i]
         #print("transfer_matrix:",transfer_matrix)
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics
@@ -297,7 +365,7 @@ class Robot:
 
         ##IK_TOLERANCE = 1e-3#
         
-        num_iter = 10
+        num_iter = 1
         
 
         # Run gradient descent optimization
@@ -313,6 +381,7 @@ class Robot:
                 axisR = rfk.T @ rtp
                 robj = R.from_matrix(axisR)
                 rotvec = robj.as_rotvec()# in the world frame/the frame rfk and rtp referenced to
+                rotvec = rfk @ rotvec #do we need to time a rotation
                 print("rotvec", rotvec)
                 print("(transfer_matrix-hfk)[:3,-1]", (transfer_matrix-hfk)[:3,-1])
                 #might need to change theta to row pitch yaw convention, by reverse the sequence
@@ -327,18 +396,21 @@ class Robot:
                 TP = self.end_effector(transfer_matrix)
                 # Compute the difference between current pose and goal
                 d = FK - TP
-
+            
+            #d[3:] = 0 #mask the rotation
+            #print("d", d)
             # Compute the Jacobian
-            J = self.jacobians(thetas)[:, :, -1]
+            J = self.analy_jacobian(thetas)
+            print("J", J)
             # Compute the cost gradient
             cost_gradient = np.dot(J.T, d)
-            #print("cost_gradient ",cost_gradient )
+            print("cost_gradient ",cost_gradient )
             thetas = thetas - step_size * cost_gradient
             for theta in thetas:
                 if abs(theta)>= 2*np.pi:
                     theta += -np.sign(theta)*2*np.pi
             # Check stopping condition, and return if it is met.
-            #print("np.linalg.norm(cost_gradient)",np.linalg.norm(cost_gradient))
+            print("np.linalg.norm(cost_gradient)",np.linalg.norm(cost_gradient))
             if np.linalg.norm(cost_gradient) < TaskConfig.IK_TOLERANCE :
                 print("Reached")
                 return thetas
