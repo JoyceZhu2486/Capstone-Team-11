@@ -13,6 +13,7 @@ from frankapy import FrankaConstants as FC
 from franka_interface_msgs.msg import SensorDataGroup
 from frankapy.proto_utils import sensor_proto2ros_msg, make_sensor_group_msg
 from frankapy.proto import JointPositionSensorMessage, ShouldTerminateSensorMessage
+from robot import *
 import rospy
 
 class TrajectoryGenerator:
@@ -90,18 +91,23 @@ class TrajectoryGenerator:
         # Time steps
         times = np.linspace(0, duration, n_points)
         # Initialize list of waypoints
-        cartesian_trap = self.generate_trapezoidal_trajectory(start_pose, end_pose, max_vel, max_acc, duration)
+        cartesian_trap = self.generate_trapezoidal_trajectory(start_pose, end_pose, duration)
         # Assume start_pose and end_pose are arrays containing x,y,z
         waypoints = np.zeros(len(cartesian_trap))
         waypoints[0] = current_joint
+        current_matrix = robot.forward_kinematics(current_joint)[:,:,-1]
+        next_matrix = current_matrix
+        next_matrix[2][0] = cartesian_trap[0][0]
+        next_matrix[2][1] = cartesian_trap[0][1]
+        next_matrix[2][2] = cartesian_trap[0][2]
 
-        for i in range(len(cartesian_trap)):
+        for i in range(1, len(cartesian_trap)):
             robot = Robot()
-            if(i != 0):
-                waypoints[i] = robot._inverse_kinematics(cartesian_trap[i], waypoints[i-1])
-                
+            next_matrix[2][0] = cartesian_trap[i][0]
+            next_matrix[2][1] = cartesian_trap[i][1]
+            next_matrix[2][2] = cartesian_trap[i][2]
+            waypoints[i] = robot._inverse_kinematics(next_matrix, waypoints[i-1])
         return waypoints
-            
     
     def generate_straight_line(self, start_point, end_point, duration=None):
         """
@@ -178,7 +184,7 @@ class TrajectoryGenerator:
         """
         raise NotImplementedError("Implement curve drawing trajectory")
     
-    def generate_trapezoidal_trajectory(self, q_start, q_end, max_vel, max_acc, duration):
+    def generate_trapezoidal_trajectory(self, q_start, q_end, duration):
         """
         Generate trajectory with trapezoidal velocity profile.
         
@@ -211,6 +217,8 @@ class TrajectoryGenerator:
         - Calculate proper acceleration time
         - Ensure smooth transitions between phases
         """
+        max_vel = 5
+        max_acc = 5
         # Time interval
         dt = 0.02  # 20 ms intervals
         time_steps = np.arange(0, duration + dt, dt)
