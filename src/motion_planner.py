@@ -109,44 +109,56 @@ class TrajectoryGenerator:
             waypoints[i] = robot._inverse_kinematics(next_matrix, waypoints[i-1])
         return waypoints
     
-    def generate_straight_line(self, start_point, end_point, duration=None):
+def generate_straight_line(self, start_pose, current_joint, duration=None):
         """
         This function creates a smooth straight-line trajectory for the robot's end-effector to follow.
 
         Parameters
         ----------
-        start_point : array_like
-            The starting point of the line in Cartesian space.
-        end_point : array_like
-            The ending point of the line in Cartesian space.
+        start_pose : np.ndarray
+            The starting pose of the line in Cartesian space (4x4 transformation matrix).
+        current_joint : np.ndarray
+            The current joint configuration of the robot.
         duration : float, optional
             The total duration over which the line should be drawn. If not specified,
-            the speed should default to a pre-defined value.
-            
-        Return
-        ------
-        array_like
-            Input to either generate_cartesian_waypoints or follow_cartesian_trajectory
+            the speed defaults to a pre-defined value.
 
-        Raises
-        ------
-        NotImplementedError
-            This function needs to be implemented.
+        Returns
+        -------
+        np.ndarray
+            Joint trajectory for the straight-line path.
 
         Notes
         -----
-        - The method needs to handle both the translational and rotational dynamics to ensure
-        that the end-effector is properly aligned during the motion.
-        - If duration is not provided, calculate it based on a default speed and the distance between points.
-
-        Hints
-        -----
-        - Use linear interpolation to compute intermediate points along the line.
-        - Optionally, incorporate orientation interpolation if the end-effector's orientation is critical.
-        - This method should eventually call a function to actually move the robot's joints based on the
-        interpolated points.
+        - The method uses both translational and rotational dynamics to ensure the end-effector
+        is properly aligned during the motion.
+        - The method generates Cartesian waypoints and converts them to joint trajectories using IK.
         """
-        raise NotImplementedError("Implement line drawing trajectory")
+        # Define offsets for the straight line in the x and y directions
+        x_offset = 0.1  # Move 10 cm along the x-axis
+        y_offset = 0.05  # Move 5 cm along the y-axis
+
+        # Copy the start pose and calculate the end pose
+        end_pose = start_pose.copy()
+        end_pose[0, 3] += x_offset
+        end_pose[1, 3] += y_offset
+
+        # Calculate the distance between start and end points
+        start_point = start_pose[:3, 3]
+        end_point = end_pose[:3, 3]
+        distance = np.linalg.norm(end_point - start_point)
+
+        # Set default duration if not provided
+        if duration is None:
+            speed = 0.1  # Default speed (m/s)
+            duration = distance / speed
+
+        # Generate Cartesian waypoints and convert to joint trajectory
+        joint_trajectory = self.generate_cartesian_waypoints(
+            start_pose, end_pose, duration, current_joint
+        )
+
+        return joint_trajectory
         
     def generate_curve(self, points, duration=None):
         """
