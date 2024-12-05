@@ -214,31 +214,30 @@ class Robot:
         # - Determine the rotational component based on joint contributions.
 
         # for each joint change
-        base_poses = self.forward_kinematics(thetas)
-        print("base poses is:", base_poses)
+        poses = self.forward_kinematics(thetas)
+        # print("base poses is:", poses)
 
         for i in range(self.dof):
             # thetas_less = np.copy(thetas)
             # thetas_less[i] = thetas_less[i] - epsilon
             # frames_less = self.forward_kinematics(thetas_less)
 
-            perturbed_thetas = np.copy(thetas)
-            perturbed_thetas[i] += epsilon
-            perturbed_poses = self.forward_kinematics(perturbed_thetas)
+            thetas_more = np.copy(thetas)
+            thetas_more[i] += epsilon
+            frames_more = self.forward_kinematics(thetas_more)
             
-
             # for each frame
             for frame in range(self.dof + 2):
-                base_pose = base_poses[...,frame]
-                print("base_pose is:", base_pose)
-                perturbed_pose = perturbed_poses[...,frame]
+                base_pose = poses[...,frame]
+                # print("base_pose is:", base_pose)
+                frame_more = frames_more[...,frame]
 
                 # Compute translational component
-                delta_p = (perturbed_pose[:3, 3] - base_pose[:3, 3]) / epsilon
+                delta_p = (frame_more[:3, 3] - base_pose[:3, 3]) / epsilon
                 jacobians[:3, i, frame] = delta_p
 
                 # Compute rotational component
-                delta_R = perturbed_pose[:3, :3] @ base_pose[:3, :3].T
+                delta_R = frame_more[:3, :3] @ base_pose[:3, :3].T
                 rotation = R.from_matrix(delta_R)
                 delta_omega = rotation.as_rotvec() / epsilon
                 jacobians[3:, i, frame] = delta_omega
@@ -362,12 +361,13 @@ class Robot:
         current_joints = seed_joints
         for _ in range(max_iterations):
             current_pose = self.forward_kinematics(current_joints)
-            pose_error = target_pose.matrix - current_pose[...,-1]
+            pose_error = target_matrix - current_pose[...,-1]
             position_error = pose_error[:3, 3]
             # print((target_pose.rotation - current_pose[:3, :3]).flatten())
             #rotation_error = self._compute_rotation_error(target_pose.rotation, current_pose[:3, :3])
             # rotation_error = self._rotation_to_quaternion(target_pose.rotation)[1:] - self._rotation_to_quaternion(current_pose[:3, :3])[1:]
-            rotation_error = target_pose.rotation @ current_pose[...,-1][:3,:3].T 
+            print(target_matrix)
+            rotation_error = (target_matrix[s3,:3]) @ current_pose[...,-1][:3,:3].T 
             rotation_error = R.from_matrix(rotation_error).as_rotvec()
             error = np.hstack((position_error, rotation_error))
             if np.linalg.norm(error) < tolerance:

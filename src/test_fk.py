@@ -14,11 +14,21 @@ def main():
     time.sleep(0.5)
 
     fa.reset_joints()
+    fa.run_guide_mode(duration = 10)
 
     # q_pre_pick = [-2.98082015e-01, 2.02375423e-01, -2.12616259e-01, -2.20721670e+00, 5.67826931e-04, 2.22226007e+00, 1.87220393e+00]
     # fa.goto_joints(q_pre_pick, use_impedance=False, dynamic=False)
     real_pose = fa.get_pose()
     real_joints = fa.get_joints()
+
+    target_whiteboard = np.array([[ 0.99999104, -0.0,         -0.00423287,  0.47806021],
+        [-0.00272927,  0.76436905, -0.64477322,  0.28901706],
+        [ 0.00323547,  0.64477899,  0.7643622,   0.28643926],
+        [ 0.0,          0.0,          0.0,          1.0       ]])
+    target_wb_joint = robot._inverse_kinematics(target_whiteboard, real_joints)
+    print(target_wb_joint)
+    fa.goto_joints(target_wb_joint, use_impedance=False, dynamic=False)
+
 
     print("real pose:\n", real_pose)
     print("real pose translation :\n", real_pose.translation)
@@ -38,12 +48,54 @@ def main():
     print("frame with flange and offset: \n", fk_ee)
     print("-----------------------------------")
 
-    calculated_frames = robot.forward_kinematics(calculated_joints)
-    fk_ee_calculated = frames[...,-1]
-    print("frame with flange and offset: \n", fk_ee_calculated)
-    print("-----------------------------------")
-    print("-----------------------------------")
-    print("-----------------------------------")
+    # calculated_frames = robot.forward_kinematics(calculated_joints)
+    # fk_ee_calculated = frames[...,-1]
+    # print("frame with flange and offset: \n", fk_ee_calculated)
+    # print("-----------------------------------")
+    # print("-----------------------------------")
+    # print("-----------------------------------")
+
+    # # calibrate
+    # fa.open_gripper()
+    # calibrator = WorkspaceCalibrator() 
+    # pen_pos = calibrator.calibrate_pen_holders()
+    # pen_real_joints = fa.get_joints()
+    # pose2 = fa.get_pose()
+    # fJ = fa.get_jacobian(pen_real_joints)
+    # aJ = robot.analy_jacobian(pen_real_joints)
+    # print("DIFF", fJ - aJ)
+    # input("Press Enter to open gripper and reset joints")
+    # fa.open_gripper()
+    # fa.reset_joints()
+
+    # pen_holder_pos = np.load("pen_holder_pose.npy")
+    # print("pen holder pos:\n", pen_holder_pos)
+    # pen_holder_target = fk_ee
+    # pen_holder_target[0][3] = pen_holder_pos[0]
+    # pen_holder_target[1][3] = pen_holder_pos[1]
+    # pen_holder_target[2][3] = pen_holder_pos[2]
+    
+    # print("pen holder target:\n", pen_holder_target)
+    # print("-----------------------------------")
+   
+    # pen_holder_joints = robot._inverse_kinematics(pose2, real_joints)
+    
+    # print("pen holder real joints",pen_real_joints)
+    # print("calculated_joints",pen_holder_joints)
+
+    # calculated_frames = robot.forward_kinematics(pen_holder_joints)
+    # fk_ee_calculated = frames[...,-1]
+    # print("End effecter from calculated ik: \n", fk_ee_calculated)
+    # print("-----------------------------------")
+
+    # input("press Enter to go to joint position")
+    # fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
+    # fa.close_gripper()
+    
+
+    # fk_pprevious_pose = frames[...,-4]
+    # fk_previous_pose = frames[...,-3]
+    # fk_pose_without_flange = frames[...,-2]
 
     # calibrate
     fa.open_gripper()
@@ -87,6 +139,10 @@ def main():
     # fk_previous_pose = frames[...,-3]
     # fk_pose_without_flange = frames[...,-2]
 
+    # print("real pose:\n", real_pose)
+    # print("real joints:\n", real_joints)
+    # print("-----------------------------------")
+    # print("ik calculated joints:\n", calculated_joints)
     # print("real pose:\n", real_pose)
     # print("real joints:\n", real_joints)
     # print("-----------------------------------")
