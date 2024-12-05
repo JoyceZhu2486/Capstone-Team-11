@@ -31,7 +31,7 @@ def main():
     print("calculated_end_effector\n", ee_variables)
     print("-----------------------------------")
 
-    calculated_joints = robot._inverse_kinematics(real_pose, real_joints, True)
+    calculated_joints = robot._inverse_kinematics(real_pose, real_joints)
     # fa.goto_joints(calculated_joints, use_impedance=False, dynamic=False)
     print("real_joints",real_joints)
     print("calculated_joints",calculated_joints)
@@ -51,6 +51,9 @@ def main():
     pen_pos = calibrator.calibrate_pen_holders()
     pen_real_joints = fa.get_joints()
     pose2 = fa.get_pose()
+    fJ = fa.get_jacobian(pen_real_joints)
+    aJ = robot.analy_jacobian(pen_real_joints)
+    print("DIFF", fJ - aJ)
     input("Press Enter to open gripper and reset joints")
     fa.open_gripper()
     fa.reset_joints()
@@ -64,8 +67,8 @@ def main():
     
     print("pen holder target:\n", pen_holder_target)
     print("-----------------------------------")
-
-    pen_holder_joints = robot._inverse_kinematics(pose2, real_joints, True)
+   
+    pen_holder_joints = robot._inverse_kinematics(pose2, real_joints)
     
     print("pen holder real joints",pen_real_joints)
     print("calculated_joints",pen_holder_joints)

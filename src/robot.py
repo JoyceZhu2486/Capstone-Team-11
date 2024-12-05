@@ -103,7 +103,8 @@ class Robot:
 
         for i in range(len(self.dh_parameters)):
             a, alpha, d, theta_offset = self.dh_parameters[i]
-            if i>=7: theta = 0
+            if i==7: theta = -np.pi/4
+            elif i == 8: theta = 0
             else:
                 theta = thetas[i] + theta_offset  # Add the offset to the joint angle
             
@@ -184,7 +185,7 @@ class Robot:
                                     -frame[0, 2])
         return [x, y, z, roll, pitch, yaw]
 
-    def jacobians(self, thetas):
+    def jacobian(self, thetas):
         """
         Compute the Jacobians for each frame.
 
@@ -201,8 +202,8 @@ class Robot:
         if thetas.shape != (self.dof,):
             raise ValueError(f'Invalid thetas: Expected shape ({self.dof},), got {thetas.shape}.')
 
-        jacobians = np.zeros((6, self.dof, self.dof + 1))
-        epsilon = 1
+        jacobians = np.zeros((6, self.dof, self.dof + 2))
+        epsilon = 0.001
 
         # --------------- BEGIN STUDENT SECTION ----------------------------------------
         # TODO: Implement the numerical computation of the Jacobians
@@ -213,30 +214,35 @@ class Robot:
         # - Determine the rotational component based on joint contributions.
 
         # for each joint change
-        for i in range(self.dof):
-            thetas_less = thetas
-            thetas_less[i] = thetas_less[i] - epsilon
-            frames_less = self.forward_kinematics(thetas_less)
+        base_poses = self.forward_kinematics(thetas)
+        print("base poses is:", base_poses)
 
-            thetas_more = thetas
-            thetas_more[i] = thetas_more[i] + epsilon
-            frames_more = self.forward_kinematics(thetas_more)
-            frames = np.zeros((4, 4, len(self.dh_parameters)+1))
+        for i in range(self.dof):
+            # thetas_less = np.copy(thetas)
+            # thetas_less[i] = thetas_less[i] - epsilon
+            # frames_less = self.forward_kinematics(thetas_less)
+
+            perturbed_thetas = np.copy(thetas)
+            perturbed_thetas[i] += epsilon
+            perturbed_poses = self.forward_kinematics(perturbed_thetas)
+            
+
             # for each frame
-            for j in range(len(frames_less)):
-                # computer the change in x, y, z, roll, pitch, yaw
-                [x_l, y_l, z_l, roll_l, pitch_l, yaw_l] = \
-                    self.frame_to_workspace(frames_less[:, :, j])
-                [x_m, y_m, z_m, roll_m, pitch_m, yaw_m] = \
-                    self.frame_to_workspace(frames_more[:, :, j])
-    
-                jacobians[0][i][j] = (x_m     - x_l    ) / epsilon
-                jacobians[1][i][j] = (y_m     - y_l    ) / epsilon
-                jacobians[2][i][j] = (z_m     - z_l    ) / epsilon
-                jacobians[3][i][j] = (roll_m  - roll_l ) / epsilon
-                jacobians[4][i][j] = (pitch_m - pitch_l) / epsilon
-                jacobians[5][i][j] = (yaw_m   - yaw_l  ) / epsilon
-        
+            for frame in range(self.dof + 2):
+                base_pose = base_poses[...,frame]
+                print("base_pose is:", base_pose)
+                perturbed_pose = perturbed_poses[...,frame]
+
+                # Compute translational component
+                delta_p = (perturbed_pose[:3, 3] - base_pose[:3, 3]) / epsilon
+                jacobians[:3, i, frame] = delta_p
+
+                # Compute rotational component
+                delta_R = perturbed_pose[:3, :3] @ base_pose[:3, :3].T
+                rotation = R.from_matrix(delta_R)
+                delta_omega = rotation.as_rotvec() / epsilon
+                jacobians[3:, i, frame] = delta_omega
+
         return jacobians
         # --------------- END STUDENT SECTION --------------------------------------------
     
@@ -301,14 +307,14 @@ class Robot:
         # o_n = o[-1]  # Position of the end-effector
 
         # for i in range(n):
-        #     Jp = np.cross(z[i], (o_n - o[i]))
+        #     Jp = np.cross(z[i], (o_n - o[i]))  jacobian = self.jacobians(current_joints)[:, :, -1]
         #     Jo = z[i]
         #     J[:3, i] = Jp
         #     J[3:, i] = Jo
 
         # return J
 
-    def _inverse_kinematics(self, target_pose, thetas, method):
+    def _inverse_kinematics(self, target_pose, seed_joints):
         """
         Compute inverse kinematics using Jacobian pseudo-inverse method.
         
@@ -339,83 +345,72 @@ class Robot:
         - The iteration parameters are defined in RobotConfig and TaskConfig
         """
         
-        if thetas.shape[0] != (self.dof):
+        if seed_joints.shape[0] != (self.dof):
             raise ValueError(f'Invalid initial_thetas: Expected shape ({self.dof},), got {seed_joints.shape}.')
-        if type(target_pose) == RigidTransform:
-            # raise ValueError('Invalid target_pose: Expected RigidTransform.')
-            transfer_matrix = np.eye(4)
-            for i in range(3):
-                for j in range(3):
-                    transfer_matrix[i][j] = target_pose.rotation[i][j]
-                transfer_matrix[i][3] = target_pose.translation[i]
-        else:
-            transfer_matrix = target_pose
-
-        if thetas is None:
-            thetas = self.fa.get_joints()
-
-        #print("transfer_matrix:",transfer_matrix)
+        if type(target_pose) != RigidTransform:
+            raise ValueError('Invalid target_pose: Expected RigidTransform.')
+        
+        if seed_joints is None:
+            seed_joints = self.robot.arm.get_joints()
+        
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics
-        #  Motion planning parameters
-        ##PATH_RESOLUTION = 0.01  # meters
+        max_iterations = TaskConfig.IK_MAX_ITERATIONS
+        tolerance = TaskConfig.IK_TOLERANCE
+        alpha = 0.05
         
-        # Step size for gradient update
-        step_size = 0.01
-
-        ##IK_TOLERANCE = 1e-3#
-        
-        num_iter = 1
-        
-
-        # Run gradient descent optimization
-        while num_iter < TaskConfig.IK_MAX_ITERATIONS:
-            # TODO:[x, y, z, roll, pitch, yaw] Check if this is the right type for target_pose
+        current_joints = seed_joints
+        for _ in range(max_iterations):
+            current_pose = self.forward_kinematics(current_joints)
+            pose_error = target_pose.matrix - current_pose[...,-1]
+            position_error = pose_error[:3, 3]
+            # print((target_pose.rotation - current_pose[:3, :3]).flatten())
+            #rotation_error = self._compute_rotation_error(target_pose.rotation, current_pose[:3, :3])
+            # rotation_error = self._rotation_to_quaternion(target_pose.rotation)[1:] - self._rotation_to_quaternion(current_pose[:3, :3])[1:]
+            rotation_error = target_pose.rotation @ current_pose[...,-1][:3,:3].T 
+            rotation_error = R.from_matrix(rotation_error).as_rotvec()
+            error = np.hstack((position_error, rotation_error))
+            if np.linalg.norm(error) < tolerance:
+                return current_joints
             
-            cost_gradient = np.zeros(self.dof)
-            # Compute the current end effector pose
-            if (method):#this method should work
-                hfk = self.forward_kinematics(thetas)[:,:,-1]
-                rfk = hfk[:3,:3]
-                rtp = transfer_matrix[:3,:3]
-                axisR = rfk.T @ rtp
-                robj = R.from_matrix(axisR)
-                rotvec = robj.as_rotvec()# in the world frame/the frame rfk and rtp referenced to
-                rotvec = rfk @ rotvec #do we need to time a rotation
-                print("rotvec", rotvec)
-                print("(transfer_matrix-hfk)[:3,-1]", (transfer_matrix-hfk)[:3,-1])
-                #might need to change theta to row pitch yaw convention, by reverse the sequence
-                #rotvec = rotvec[::-1] 
-                #print("(ntransfer_matrix-hfk)[:3,-1]", (transfer_matrix-hfk)[:3,-1])
-                #print("rotv", rotvec)
-                d = np.concatenate(((transfer_matrix-hfk)[:3,-1], rotvec))
-                print("d", d)
-
-            else:#this might also work
-                FK = self.end_effector(thetas)
-                TP = self.end_effector(transfer_matrix)
-                # Compute the difference between current pose and goal
-                d = FK - TP
+            jacobian = self.jacobian(current_joints)[:, :, -1]
+            jacobian_pseudo_inverse = np.linalg.pinv(jacobian)
+            delta_joints = alpha * jacobian_pseudo_inverse @ error
+            current_joints += delta_joints
             
-            #d[3:] = 0 #mask the rotation
-            #print("d", d)
-            # Compute the Jacobian
-            J = self.analy_jacobian(thetas)
-            print("J", J)
-            # Compute the cost gradient
-            cost_gradient = np.dot(J.T, d)
-            print("cost_gradient ",cost_gradient )
-            thetas = thetas - step_size * cost_gradient
-            for theta in thetas:
-                if abs(theta)>= 2*np.pi:
-                    theta += -np.sign(theta)*2*np.pi
-            # Check stopping condition, and return if it is met.
-            print("np.linalg.norm(cost_gradient)",np.linalg.norm(cost_gradient))
-            if np.linalg.norm(cost_gradient) < TaskConfig.IK_TOLERANCE :
-                print("Reached")
-                return thetas
-
-            num_iter += 1
-
-        print("Reached Max Iteration")
-        return thetas
+            # if not self.is_joints_reachable(current_joints):
+            #     return None
+        
+        return None
+        # --------------- END STUDENT SECTION --------------------------------------------------
+    
+    
+    def _rotation_to_quaternion(self, R):
+        """Convert rotation matrix to quaternion"""
+        tr = np.trace(R)
+        if tr > 0:
+            S = np.sqrt(tr + 1.0) * 2
+            qw = 0.25 * S
+            qx = (R[2,1] - R[1,2]) / S
+            qy = (R[0,2] - R[2,0]) / S
+            qz = (R[1,0] - R[0,1]) / S
+        else:
+            if R[0,0] > R[1,1] and R[0,0] > R[2,2]:
+                S = np.sqrt(1.0 + R[0,0] - R[1,1] - R[2,2]) * 2
+                qw = (R[2,1] - R[1,2]) / S
+                qx = 0.25 * S
+                qy = (R[0,1] + R[1,0]) / S
+                qz = (R[0,2] + R[2,0]) / S
+            elif R[1,1] > R[2,2]:
+                S = np.sqrt(1.0 + R[1,1] - R[0,0] - R[2,2]) * 2
+                qw = (R[0,2] - R[2,0]) / S
+                qx = (R[0,1] + R[1,0]) / S
+                qy = 0.25 * S
+                qz = (R[1,2] + R[2,1]) / S
+            else:
+                S = np.sqrt(1.0 + R[2,2] - R[0,0] - R[1,1]) * 2
+                qw = (R[1,0] - R[0,1]) / S
+                qx = (R[0,2] + R[2,0]) / S
+                qy = (R[1,2] + R[2,1]) / S
+                qz = 0.25 * S
+        return np.array([qw, qx, qy, qz])
