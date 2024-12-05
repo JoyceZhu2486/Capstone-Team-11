@@ -109,7 +109,7 @@ class TrajectoryGenerator:
             waypoints[i] = robot._inverse_kinematics(next_matrix, waypoints[i-1])
         return waypoints
     
-def generate_straight_line(self, start_pose, current_joint, duration=None):
+    def generate_straight_line(self, start_pose, current_joint, duration=None):
         """
         This function creates a smooth straight-line trajectory for the robot's end-effector to follow.
 
@@ -160,6 +160,7 @@ def generate_straight_line(self, start_pose, current_joint, duration=None):
 
         return joint_trajectory
         
+
     def generate_curve(self, points, duration=None):
         """
         This function creates a smooth curved trajectory for the robot's end-effector to follow.
