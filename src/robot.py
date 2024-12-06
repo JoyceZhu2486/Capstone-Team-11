@@ -339,7 +339,7 @@ class Robot:
             # print((target_pose.rotation - current_pose[:3, :3]).flatten())
             #rotation_error = self._compute_rotation_error(target_pose.rotation, current_pose[:3, :3])
             # rotation_error = self._rotation_to_quaternion(target_pose.rotation)[1:] - self._rotation_to_quaternion(current_pose[:3, :3])[1:]
-            print(target_matrix)
+            # print(target_matrix)
             rotation_error = (target_matrix[:3,:3]) @ current_pose[...,-1][:3,:3].T 
             rotation_error = R.from_matrix(rotation_error).as_rotvec()
             error = np.hstack((position_error, rotation_error))

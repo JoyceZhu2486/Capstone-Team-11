@@ -22,6 +22,12 @@ class TrajectoryGenerator:
         self.max_vel = RobotConfig.MAX_VELOCITY
         self.max_acc = RobotConfig.MAX_ACCELERATION
     
+    def whiteboard_to_world(self, whiteboard_xyz, whiteboard_matrix):
+        whiteboard_rotation = whiteboard_matrix[:3,:3]
+        whiteboard_translation = whiteboard_matrix[:3,3]
+        world_xyz = whiteboard_rotation @ whiteboard_xyz + whiteboard_translation
+        return world_xyz
+    
     def generate_joint_waypoints(self, start_joint, end_joint, duration):
         """
         Generate a pose trajectory as a series of waypoints using linear interpolation.
@@ -86,30 +92,32 @@ class TrajectoryGenerator:
         - Ensure 20ms spacing between waypoints
         - For rotations: Use SLERP to interpolate between orientations
         """
+        if((start_pose == end_pose).all()):
+            raise ValueError("The start pose is equal to the end pose!")
+        robot = Robot()
         # Number of waypoints
         n_points = int(duration / self.dt) + 1
         # Time steps
         times = np.linspace(0, duration, n_points)
         # Initialize list of waypoints
-        cartesian_trap = self.generate_trapezoidal_trajectory(start_pose, end_pose, duration)
+        cartesian_trajectory = self.generate_trapezoidal_trajectory(start_pose, end_pose, duration)
         # Assume start_pose and end_pose are arrays containing x,y,z
-        waypoints = np.zeros(len(cartesian_trap))
-        waypoints[0] = current_joint
+        waypoints = np.zeros((len(cartesian_trajectory),len(current_joint)))
+        waypoints[0] = np.copy(current_joint)
         current_matrix = robot.forward_kinematics(current_joint)[:,:,-1]
-        next_matrix = current_matrix
-        next_matrix[2][0] = cartesian_trap[0][0]
-        next_matrix[2][1] = cartesian_trap[0][1]
-        next_matrix[2][2] = cartesian_trap[0][2]
+        next_matrix = np.copy(current_matrix)
+        next_matrix[0][3] = cartesian_trajectory[0][0]
+        next_matrix[1][3] = cartesian_trajectory[0][1]
+        next_matrix[2][3] = cartesian_trajectory[0][2]
 
-        for i in range(1, len(cartesian_trap)):
-            robot = Robot()
-            next_matrix[2][0] = cartesian_trap[i][0]
-            next_matrix[2][1] = cartesian_trap[i][1]
-            next_matrix[2][2] = cartesian_trap[i][2]
+        for i in range(1, len(cartesian_trajectory)):
+            next_matrix[0][3] = cartesian_trajectory[i][0]
+            next_matrix[1][3] = cartesian_trajectory[i][1]
+            next_matrix[2][3] = cartesian_trajectory[i][2]
             waypoints[i] = robot._inverse_kinematics(next_matrix, waypoints[i-1])
         return waypoints
     
-    def generate_straight_line(self, start_pose, current_joint, duration=None):
+    def generate_straight_line(self, start_pose, current_joint, duration, whiteboard_matrix):
         """
         This function creates a smooth straight-line trajectory for the robot's end-effector to follow.
 
@@ -134,28 +142,36 @@ class TrajectoryGenerator:
         is properly aligned during the motion.
         - The method generates Cartesian waypoints and converts them to joint trajectories using IK.
         """
-        # Define offsets for the straight line in the x and y directions
-        x_offset = 0.1  # Move 10 cm along the x-axis
-        y_offset = 0.05  # Move 5 cm along the y-axis
+        # # Define offsets for the straight line in the x and y directions
+        # x_offset = 0.1  # Move 10 cm along the x-axis
+        # y_offset = 0.05  # Move 5 cm along the y-axis
 
-        # Copy the start pose and calculate the end pose
+        # # Copy the start pose and calculate the end pose
+        # end_pose = start_pose.copy()
+        # end_pose[0, 3] += x_offset
+        # end_pose[1, 3] += y_offset
+
+        end_whiteboard_xyz = np.array([0.1,0,0])
+        end_xyz = self.whiteboard_to_world(end_whiteboard_xyz, whiteboard_matrix)
         end_pose = start_pose.copy()
-        end_pose[0, 3] += x_offset
-        end_pose[1, 3] += y_offset
+        end_pose[0][3] = end_xyz[0]
+        end_pose[1][3] = end_xyz[1]
+        end_pose[2][3] = end_xyz[2]
+        
+        print("real start matrix:\n", start_pose)
+        print("calculated start xyz:\n", self.whiteboard_to_world(np.array([0,0,0]), whiteboard_matrix))
+        print("calculated end xyz:\n", end_xyz)
 
         # Calculate the distance between start and end points
         start_point = start_pose[:3, 3]
         end_point = end_pose[:3, 3]
-        distance = np.linalg.norm(end_point - start_point)
 
-        # Set default duration if not provided
-        if duration is None:
-            speed = 0.1  # Default speed (m/s)
-            duration = distance / speed
+        print("start pose:", start_pose)
+        print("end pose:", end_pose)
 
         # Generate Cartesian waypoints and convert to joint trajectory
         joint_trajectory = self.generate_cartesian_waypoints(
-            start_pose, end_pose, duration, current_joint
+            start_point, end_point, duration, current_joint
         )
 
         return joint_trajectory
@@ -230,6 +246,8 @@ class TrajectoryGenerator:
         - Calculate proper acceleration time
         - Ensure smooth transitions between phases
         """
+        if ((q_start == q_end).all()):
+            raise ValueError(f"The start point equals end point!")
         max_vel = 0.5
         max_acc = 0.5
         # Time interval
@@ -249,15 +267,18 @@ class TrajectoryGenerator:
         # Sign of movement for each joint
         sign = np.sign(delta_q)
 
+
         # Absolute distance to move for each joint
         dist = np.abs(delta_q)
 
-        # Initialize arrays to store per-joint parameters
+         # Initialize arrays to store per-joint parameters
         a_j = np.zeros(num_joints)
         v_peak_j = np.zeros(num_joints)
         t_ramp_j = np.zeros(num_joints)
         q_j_t_ramp = np.zeros(num_joints)
         q_j_t_total_minus_t_ramp = np.zeros(num_joints)
+
+
 
         # Time available for acceleration/deceleration (assuming symmetric)
         t_total = duration
@@ -296,38 +317,6 @@ class TrajectoryGenerator:
 
         return trajectory
 
-
-
-    def interpolate_trajectory(self, times, trajectory):
-        """
-        Interpolate a given trajectory to match the required 20ms control rate.
-        This function will create a new trajectory that aligns with the timing requirements
-        for dynamic control of the robot.
-
-        Parameters
-        ----------
-        times : array_like
-            An array of time points for which the trajectory needs interpolation.
-        trajectory : array_like
-            An array of waypoints or joint configurations that define the initial trajectory.
-
-        Raises
-        ------
-        NotImplementedError
-            This function needs to be implemented.
-
-        Notes
-        -----
-        - The output trajectory should have waypoints spaced at exactly 20ms intervals.
-        - This method is critical for ensuring smooth motion and adhering to the control loop timing.
-
-        Hints
-        -----
-        - Consider using linear interpolation for simple cases or cubic spline interpolation for smoother trajectories.
-        - Ensure the interpolated trajectory respects the physical and operational limits of the robot, such as
-        maximum velocities and accelerations.
-        """
-        raise NotImplementedError("Implement trajectory interpolation")
 
 class TrajectoryFollower:
     def __init__(self):
