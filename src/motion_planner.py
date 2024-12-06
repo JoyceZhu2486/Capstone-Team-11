@@ -230,8 +230,8 @@ class TrajectoryGenerator:
         - Calculate proper acceleration time
         - Ensure smooth transitions between phases
         """
-        max_vel = 5
-        max_acc = 5
+        max_vel = 0.5
+        max_acc = 0.5
         # Time interval
         dt = 0.02  # 20 ms intervals
         time_steps = np.arange(0, duration + dt, dt)

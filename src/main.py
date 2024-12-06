@@ -12,14 +12,56 @@ from utils  import *
 
 
 def pose_to_matrix(rmatrix, pose):
-    rmatrix[0][3] = pose[0]
-    rmatrix[1][3] = pose[1]
-    rmatrix[2][3] = pose[2]
-    print(rmatrix)
-    return rmatrix
+    """
+    Updates the translation part of a 4x4 transformation matrix.
+
+    Parameters
+    ----------
+    rmatrix : np.ndarray
+        A 4x4 transformation matrix.
+    pose : np.ndarray
+        A 3-element array or list representing [x, y, z].
+
+    Returns
+    -------
+    np.ndarray
+        A new 4x4 transformation matrix with updated translation components.
+    """
+    # Validate input matrix
+    if rmatrix.shape != (4, 4):
+        raise ValueError("Input rmatrix must be a 4x4 matrix.")
+    
+    # Validate pose length
+    if len(pose) != 3:
+        raise ValueError("Input pose must be a 3-element array or list [x, y, z].")
+
+    # Copy and update translation components
+    result = np.copy(rmatrix)
+    result[:3, 3] = pose  # Update the translation part directly
+    return result
+
 
 def matrix_to_translation(matrix):
-    return np.array([matrix[0][3],matrix[1][3], matrix[2][3]])
+    """
+    Extracts the translation (x, y, z) from a 4x4 transformation matrix.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        A 4x4 transformation matrix.
+
+    Returns
+    -------
+    np.ndarray
+        A 3-element array containing the translation components [x, y, z].
+    """
+    # Validate input matrix
+    if matrix.shape != (4, 4):
+        raise ValueError("Input matrix must be a 4x4 transformation matrix.")
+
+    # Extract and return translation components
+    return matrix[:3, 3]
+
 
 # Define default values
 parser = argparse.ArgumentParser()
@@ -32,48 +74,62 @@ if __name__ == '__main__':
     # initialize
     tg = TrajectoryGenerator()
     tf = TrajectoryFollower()
-    arm = FrankaArm()
+    fa = FrankaArm()
     robot = Robot()
     input("Press Enter to open gripper and reset joints")
-    arm.open_gripper()
-    arm.reset_joints()
+    fa.open_gripper()
+    fa.reset_joints()
 
     # calibrate
     # calibrator = WorkspaceCalibrator() 
     # bin_pose = calibrator.calibrate_pen_holders()
-    # arm.close_gripper()
+    # actual_penjoints = fa.get_joints()
+    # fa.close_gripper()
     # whiteboard_pose = calibrator.calibrate_whiteboard()
     # drop_pose = calibrator.calibrate_drop_location()
-    # arm.open_gripper()
+    # fa.open_gripper()
 
     bin_pose = np.load("pen_holder_pose.npy", allow_pickle=True)
     whiteboard_pose = np.load("whiteboard_pose.npy", allow_pickle=True)
     drop_pose = np.load("drop_bin_pose.npy", allow_pickle=True)
-    home_matrix = robot.forward_kinematics(RobotConfig.HOME_JOINTS)[:,:,-1]
-    pen_matrix = pose_to_matrix(home_matrix, bin_pose)
-    # whiteboard_pos_matrix = pos_to_matrix(whiteboard_pose)
-    # drop_pos_matrix = pos_to_matrix(drop_pose)
+
 
     # move back to home position
     print("Moving back to home position...")
-    arm.reset_joints()
-    arm.open_gripper()
-    cur_joints = RobotConfig.HOME_JOINTS
+    fa.reset_joints()
+    fa.open_gripper()
+    # current home joints
+    cur_joints = fa.get_joints()
+    print(cur_joints)
+
+    # the current pose
     cur_position = robot.forward_kinematics(cur_joints)[:,:,-1]
+    print(cur_position)
 
     # go to the position to pickup pen:
     print("Moving to pen pickup position")
-    pickup_duration = 3
-    pen_joints = robot._inverse_kinematics(pen_matrix, cur_position)
-    pickup_joint_waypoints = tg.generate_joint_waypoints(cur_position,
-                                            pen_joints, pickup_duration)
+
+    pen_matrix = pose_to_matrix(cur_position, bin_pose)
+    pickup_duration = 30
+    pen_joints = robot._inverse_kinematics(pen_matrix, cur_joints)
+    print("penjoints:\n",pen_joints)
+    # print("actual penjoints:\n",actual_penjoints)
+    input()
+    fa.goto_joints(pen_joints)
+    input()
+
+        
+    pickup_joint_waypoints = tg.generate_trapezoidal_trajectory(cur_joints, pen_joints, pickup_duration)
+    print(pickup_joint_waypoints[0])
+    print(pickup_joint_waypoints[-1])
+    
     tf.follow_joint_trajectory(pickup_joint_waypoints)
     cur_joints = pen_joints
     cur_position = robot.forward_kinematics(cur_joints)[:,:,-1]
 
     # close gripper to pickup pen:
     print("Closing gripper")
-    arm.close_gripper()
+    fa.close_gripper()
 
     # move pen above the pen holder
     print("Moving pen vertically")
@@ -81,7 +137,7 @@ if __name__ == '__main__':
     pen_above_matrix = pen_matrix
     pen_above_matrix[2][3] = pen_above_matrix[2][3] + 10
     pen_above_joints = robot._inverse_kinematics(pen_above_matrix, cur_position)
-    pen_above_waypoints = tg.generate_cartesian_waypoints(matrix_to_translation(pen_above_matrix), matrix_to_translation(pen_matrix), cur_position, lift_duration)
+    pen_above_waypoints = tg.generate_trapezoidal_trajectory(cur_joints, pen_joints, pickup_duration)
     tf.follow_joint_trajectory(pen_above_waypoints)
     cur_joints = pen_above_joints
     cur_position = robot.forward_kinematics(cur_joints)[:,:,-1]

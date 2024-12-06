@@ -263,8 +263,8 @@ class Robot:
         #frames = np.zeros((4, 4, len(self.dh_parameters)+1)) 10 frames
         Hs = self.forward_kinematics(thetas)
         on = Hs[:3,3,-1]
-        print("Hs[:,:,-1]", Hs[:,:,-1])
-        print("on", on)
+        # print("Hs[:,:,-1]", Hs[:,:,-1])
+        # print("on", on)
         Jv = np.zeros((3, self.dof))  # Linear velocity part
         Jw = np.zeros((3, self.dof))  # Angular velocity part
         # for each joint change
@@ -281,37 +281,7 @@ class Robot:
         J = np.vstack((Jv,Jw))
         
         return J
-        # n = self.dof
 
-        # if thetas.ndim != 1:
-        #     raise ValueError('Expecting a 1D array of joint angles.')
-
-        # if thetas.shape[0] != n:
-        #     raise ValueError(f'Invalid number of joints: {thetas.shape[0]} found, expecting {n}')
-
-        # # Initialize lists for z axes and origins
-        # z = [np.array([0, 0, 1])]  # z0 axis
-        # o = [np.array([0, 0, 0])]  # o0 origin
-
-        # # Compute forward kinematics to get transformations
-        # frames = self.forward_kinematics(thetas)
-        # T = [frames[..., i] for i in range(frames.shape[2])]
-
-        # for i in range(1, len(T)):
-        #     z.append(T[i][:3, 2])
-        #     o.append(T[i][:3, 3])
-
-        # # Compute Jacobian
-        # J = np.zeros((6, n))
-        # o_n = o[-1]  # Position of the end-effector
-
-        # for i in range(n):
-        #     Jp = np.cross(z[i], (o_n - o[i]))  jacobian = self.jacobians(current_joints)[:, :, -1]
-        #     Jo = z[i]
-        #     J[:3, i] = Jp
-        #     J[3:, i] = Jo
-
-        # return J
 
     def _inverse_kinematics(self, target_pose, seed_joints):
         """
@@ -346,8 +316,11 @@ class Robot:
         
         if seed_joints.shape[0] != (self.dof):
             raise ValueError(f'Invalid initial_thetas: Expected shape ({self.dof},), got {seed_joints.shape}.')
-        if type(target_pose) != RigidTransform:
-            raise ValueError('Invalid target_pose: Expected RigidTransform.')
+        if type(target_pose) == RigidTransform:
+            target_matrix = target_pose.matrix
+        else:
+            target_matrix = target_pose
+            
         
         if seed_joints is None:
             seed_joints = self.robot.arm.get_joints()
@@ -367,7 +340,7 @@ class Robot:
             #rotation_error = self._compute_rotation_error(target_pose.rotation, current_pose[:3, :3])
             # rotation_error = self._rotation_to_quaternion(target_pose.rotation)[1:] - self._rotation_to_quaternion(current_pose[:3, :3])[1:]
             print(target_matrix)
-            rotation_error = (target_matrix[s3,:3]) @ current_pose[...,-1][:3,:3].T 
+            rotation_error = (target_matrix[:3,:3]) @ current_pose[...,-1][:3,:3].T 
             rotation_error = R.from_matrix(rotation_error).as_rotvec()
             error = np.hstack((position_error, rotation_error))
             if np.linalg.norm(error) < tolerance:
@@ -382,9 +355,9 @@ class Robot:
             #     return None
         
         return None
-        # --------------- END STUDENT SECTION --------------------------------------------------
-    
-    
+        # --------------- END STUDENT SECTION ----------------
+
+
     def _rotation_to_quaternion(self, R):
         """Convert rotation matrix to quaternion"""
         tr = np.trace(R)

@@ -69,7 +69,7 @@ if __name__ == '__main__':
     # pickup_joint_waypoints = tg.generate_joint_waypoints(fa.get_joints(),
     #                                         pen_joints, pickup_duration)
     # tf.follow_joint_trajectory(pickup_joint_waypoints)
-    pickup_trapezoidal = tg.generate_trapezoidal_trajectory(fa.get_joints(), pen_joints, 5, 5, pickup_duration)
+    pickup_trapezoidal = tg.generate_trapezoidal_trajectory(fa.get_joints(), pen_joints, pickup_duration)
     tf.follow_joint_trajectory(pickup_trapezoidal)
     time.sleep(0.5)
     
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # to_board_joint_waypoints = tg.generate_joint_waypoints(fa.get_joints(),
     #                                     whiteboard_joints, to_board_duration)# weird, it seems like it can't move tothe designated position
     # tf.follow_joint_trajectory(to_board_joint_waypoints)
-    to_board_trapezoidal = tg.generate_trapezoidal_trajectory(fa.get_joints(), whiteboard_joints, 5, 5, to_board_duration)
+    to_board_trapezoidal = tg.generate_trapezoidal_trajectory(fa.get_joints(), whiteboard_joints, to_board_duration)
     tf.follow_joint_trajectory(to_board_trapezoidal)
     print(fa.get_joints)
     time.sleep(0.5)
