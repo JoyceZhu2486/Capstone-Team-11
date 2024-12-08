@@ -15,6 +15,7 @@ from frankapy.proto_utils import sensor_proto2ros_msg, make_sensor_group_msg
 from frankapy.proto import JointPositionSensorMessage, ShouldTerminateSensorMessage
 from robot import *
 import rospy
+import matplotlib.pyplot as plt
 
 class TrajectoryGenerator:
     def __init__(self, dt=0.02):
@@ -117,7 +118,7 @@ class TrajectoryGenerator:
             waypoints[i] = robot._inverse_kinematics(next_matrix, waypoints[i-1])
         return waypoints
     
-    def generate_straight_line(self, start_pose, current_joint, duration, whiteboard_matrix):
+    def generate_straight_line(self, start_whiteboard_xyz, end_whiteboard_xyz, current_joints, duration, whiteboard_matrix):
         """
         This function creates a smooth straight-line trajectory for the robot's end-effector to follow.
 
@@ -125,7 +126,7 @@ class TrajectoryGenerator:
         ----------
         start_pose : np.ndarray
             The starting pose of the line in Cartesian space (4x4 transformation matrix).
-        current_joint : np.ndarray
+        current_joints : np.ndarray
             The current joint configuration of the robot.
         duration : float, optional
             The total duration over which the line should be drawn. If not specified,
@@ -150,34 +151,45 @@ class TrajectoryGenerator:
         # end_pose = start_pose.copy()
         # end_pose[0, 3] += x_offset
         # end_pose[1, 3] += y_offset
+        robot = Robot()
+        if((start_whiteboard_xyz == end_whiteboard_xyz).all()):
+            raise ValueError("The start pose is equal to the end pose!")
+        
 
-        end_whiteboard_xyz = np.array([0.1,0,0])
+        start_xyz = self.whiteboard_to_world(start_whiteboard_xyz, whiteboard_matrix)
+
+        if(np.linalg.norm(robot.forward_kinematics(current_joints)[:,:,-1][:3,3] - start_xyz) >= 0.1):
+            print(robot.forward_kinematics(current_joints)[:,:,-1][:3,3])
+            print(start_xyz)
+            raise ValueError("current joints not at start position!")
+
+        start_pose = np.copy(whiteboard_matrix)
+        start_pose[0][3] = start_xyz[0]
+        start_pose[1][3] = start_xyz[1]
+        start_pose[2][3] = start_xyz[2]
+
         end_xyz = self.whiteboard_to_world(end_whiteboard_xyz, whiteboard_matrix)
-        end_pose = start_pose.copy()
+        end_pose = np.copy(whiteboard_matrix)
         end_pose[0][3] = end_xyz[0]
         end_pose[1][3] = end_xyz[1]
         end_pose[2][3] = end_xyz[2]
         
-        print("real start matrix:\n", start_pose)
-        print("calculated start xyz:\n", self.whiteboard_to_world(np.array([0,0,0]), whiteboard_matrix))
-        print("calculated end xyz:\n", end_xyz)
-
-        # Calculate the distance between start and end points
-        start_point = start_pose[:3, 3]
-        end_point = end_pose[:3, 3]
+        # print("real start matrix:\n", start_pose)
+        # print("calculated start xyz:\n", self.whiteboard_to_world(np.array([0,0,0]), whiteboard_matrix))
+        # print("calculated end xyz:\n", end_xyz)
 
         print("start pose:", start_pose)
         print("end pose:", end_pose)
 
         # Generate Cartesian waypoints and convert to joint trajectory
         joint_trajectory = self.generate_cartesian_waypoints(
-            start_point, end_point, duration, current_joint
+            start_xyz, end_xyz, duration, current_joints
         )
 
         return joint_trajectory
         
 
-    def generate_curve(self, points, duration=None):
+    def generate_curve(self, start_point, end_point, duration, whiteboard_matrix, current_joints):
         """
         This function creates a smooth curved trajectory for the robot's end-effector to follow.
 
@@ -211,7 +223,91 @@ class TrajectoryGenerator:
         - Ensure the trajectory is feasible within the robot's motion capabilities, particularly regarding
         joint limits and maximum velocities.
         """
-        raise NotImplementedError("Implement curve drawing trajectory")
+        # Calculate the radius and center in the whiteboard frame
+        if ((end_point == start_point).all()):
+            raise ValueError("start_point and end_point must not be the same")
+        midpoint = (start_point + end_point) / 2
+        radius = np.linalg.norm(start_point - midpoint)
+
+
+        # Generate points along the semicircle in the whiteboard frame
+        n_points = int(duration / 0.02) + 1  # Waypoints spaced 20ms apart
+        
+
+        # Create semicircle points in the specified plane
+        theta = np.linspace(0, np.pi, n_points)
+        semicircle_points = np.zeros((n_points, 3))
+        semicircle_points[:, 0] = midpoint[0] + radius * np.cos(theta)  # X-coordinates
+        semicircle_points[:, 1] = midpoint[1] + radius * np.sin(theta)  # Y-coordinates
+
+        # Transform semicircle points to world frame
+        world_points = [
+            self.whiteboard_to_world(point, whiteboard_matrix) for point in semicircle_points
+        ]
+
+        # Compute joint waypoints using inverse kinematics
+        waypoints = []
+        robot = Robot()
+
+        for target in world_points:
+            # Create target pose as a 4x4 matrix (assume orientation stays fixed for simplicity)
+            target_pose = np.copy(whiteboard_matrix)
+            target_pose[:3, 3] = target  # Set position
+            joint_angles = robot._inverse_kinematics(target_pose, current_joints)
+
+            waypoints.append(joint_angles)
+            current_joints = np.copy(joint_angles)  # Update seed for the next IK calculation
+
+        # world_x = [point[0] for point in world_points]
+        # world_y = [point[1] for point in world_points]
+        # world_z = [point[2] for point in world_points]
+
+        # # Prepare joint trajectory data for plotting
+        # waypoints = np.array(waypoints)  # Convert to numpy array
+        # n_joints = waypoints.shape[1]
+
+        # joint_labels = [f"Joint {i+1}" for i in range(n_joints)]
+
+        # # Plot trajectory in the world frame
+        # plt.figure(figsize=(12, 6))
+
+        # plt.subplot(1, 3, 1)
+        # plt.plot(world_x, world_y, label="XY Plane", linestyle="--", marker="o")
+        # plt.plot(world_x, world_z, label="XZ Plane", linestyle="--", marker="o")
+        # plt.plot(world_y, world_z, label="YZ Plane", linestyle="--", marker="o")
+        # plt.scatter(world_x, world_y, c='red', label="Waypoints (XY)")
+        # plt.title("Trajectory in World Frame")
+        # plt.xlabel("X [m]")
+        # plt.ylabel("Y/Z [m]")
+        # plt.legend()
+        # plt.grid(True)
+
+        # # Plot joint angle changes
+        # plt.subplot(1, 3, 2)
+        # time = np.linspace(0, len(waypoints) * 0.02, len(waypoints))  # Assuming 20ms interval
+        # for i in range(n_joints):
+        #     plt.plot(time, waypoints[:, i], label=joint_labels[i])
+        # plt.title("Change in Joint Angles")
+        # plt.xlabel("Time [s]")
+        # plt.ylabel("Joint Angle [rad]")
+        # plt.legend()
+        # plt.grid(True)
+
+        # # Plot change in xyz on whiteboard frame
+        # plt.subplot(1, 3, 3)
+        # time = np.linspace(0, len(semicircle_points) * 0.02, len(semicircle_points))  # Assuming 20ms interval
+        # for i in range(3):
+        #     plt.plot(time, semicircle_points[:, i], label=joint_labels[i])
+        # plt.title("Change in  whiteboard xyz")
+        # plt.xlabel("Time [s]")
+        # plt.ylabel("xyz")
+        # plt.legend()
+        # plt.grid(True)
+
+        # plt.tight_layout()
+        # plt.show()
+
+        return np.array(waypoints)
     
     def generate_trapezoidal_trajectory(self, q_start, q_end, duration):
         """

@@ -78,7 +78,7 @@ if __name__ == '__main__':
     tf = TrajectoryFollower()
     fa = FrankaArm()
     robot = Robot()
-    input("Press Enter to open gripper and reset joints")
+    input("Press Enter to 'open gripper' and reset joints")
     fa.open_gripper()
     fa.reset_joints()
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # calibrator = WorkspaceCalibrator() 
     # bin_pose = calibrator.calibrate_pen_holders()
     # actual_penjoints = fa.get_joints()
-    # fa.close_gripper()
+    # # fa.close_gripper()
     # whiteboard_pose = calibrator.calibrate_whiteboard()
     # drop_pose = calibrator.calibrate_drop_location()
     # fa.open_gripper()
@@ -105,16 +105,15 @@ if __name__ == '__main__':
     home_joints = fa.get_joints()
     # make a copy of the home joints
     home_joints_changed = np.copy(home_joints)
-    print("The current joint is:", home_joints)
-
+    # print("The current joint is:", home_joints)
     # the current pose calculated from fk
-    cur_position = robot.forward_kinematics(home_joints)[:,:,-1]
-    print("The current pose is:",cur_position)
+    home_position = robot.forward_kinematics(home_joints)[:,:,-1]
+    # print("The current pose is:",home_position)
 
     # go to the position to pickup pen:
     input("Calibration pprocess finished. Press enter to start moving:")
     print("Moving to pen pickup position")
-    pen_matrix = pose_to_matrix(cur_position, pickup_pose) # add pickup_pose xyz value to obtain the target pickup pose
+    pen_matrix = pose_to_matrix(home_position, pickup_pose) # add pickup_pose xyz value to obtain the target pickup pose
     pickup_duration = 4
     pen_joints = robot._inverse_kinematics(pen_matrix, home_joints_changed) # joints at target pickup pose
     print("Pen joints when picking pen:", pen_joints)
@@ -149,7 +148,7 @@ if __name__ == '__main__':
     tf.follow_joint_trajectory(above_pickup_waypoints)
 
     # trajectory from the point above pen_pickup to home joints
-    above_pickup_to_home = tg.generate_trapezoidal_trajectory(above_pickup_joints, home_joints, 8)
+    above_pickup_to_home = tg.generate_trapezoidal_trajectory(above_pickup_joints, home_joints, 6)
     input("Press enter to return home position")
     tf.follow_joint_trajectory(above_pickup_to_home)
 
@@ -168,25 +167,55 @@ if __name__ == '__main__':
     tf.follow_joint_trajectory(to_board_trap_waypoints)
 
 
-    # TODO: draw line 
-    straight_line_traj = tg.generate_straight_line(whiteboard_pose, whiteboard_joints , 5, whiteboard_pose)
+    # # draw line 
+    straight_line_traj = tg.generate_straight_line(np.array([0,0,0]), np.array([0.1,0,0]), whiteboard_joints, 5, whiteboard_pose)
     input("Press enter to draw straight line")
     tf.follow_joint_trajectory(straight_line_traj)
 
-    # TODO: draw curve
-    # cur_joints = above_pickup_joints
+    # # TODO: lift and move and unlift the pen
+
+    # # TODO: draw curve
+    curve_traj = tg.generate_curve(np.array([0.1,0,0]), np.array([0,0,0]), 5, whiteboard_pose, straight_line_traj[-1])
+    input("Press enter to draw curve")
+    tf.follow_joint_trajectory(curve_traj)
 
 
+    # trajectory from the point on whiteboard to home joints
+    whiteboard_to_home = tg.generate_trapezoidal_trajectory(curve_traj[-1], home_joints, 6)
+    input("Press enter to return home position")
+    tf.follow_joint_trajectory(whiteboard_to_home)
 
-    # from home position
     # move to drop position
-    # print("Moving to drop position...")
-    # to_drop_duration = 10
-    # drop_matrix = pose_to_matrix(cur_position, drop_pose)
-    # drop_joints = robot._inverse_kinematics(drop_matrix, cur_joints)
-    # to_drop_joint_waypoints = tg.generate_joint_waypoints(cur_joints,
-    #                                         drop_joints, to_drop_duration)
-    # tf.follow_joint_trajectory(to_drop_joint_waypoints) 
+    print("Moving to drop position...")
+    drop_matrix = pose_to_matrix(home_position, drop_pose)
+    print("drop_matrix before rotation:\n", drop_matrix)
+
+    # Define the rotation matrix around y-axis
+    drop_theta = -np.pi/4
+    rotation_matrix = np.array([
+        [ np.cos(drop_theta), 0, np.sin(drop_theta), 0],
+        [     0, 1,     0, 0],
+        [-np.sin(drop_theta), 0, np.cos(drop_theta), 0],
+        [     0, 0,     0, 1]
+    ])
+    drop_matrix_rotate = rotation_matrix @ drop_matrix
+    drop_matrix_rotate = pose_to_matrix(np.copy(drop_matrix_rotate), drop_pose)
+    home_joints_changed = np.copy(home_joints)
+    drop_joints = robot._inverse_kinematics(drop_matrix_rotate, home_joints_changed)
+    print("drop_matrix rotated:\n", drop_matrix_rotate)
+    print("drop_pose:\n", drop_pose)
+    print("drop_joints:\n", drop_joints)
+    to_drop_trap_traj = tg.generate_trapezoidal_trajectory(home_joints, drop_joints, 15)
+    input("Press enter to go to drop position")
+    tf.follow_joint_trajectory(to_drop_trap_traj)
+    input("Press enter to open gripper")
+    fa.open_gripper() 
+    
+    # return to home position
+    drop_to_home = tg.generate_trapezoidal_trajectory(drop_joints, home_joints, 6)
+    input("Press enter to return home position")
+    tf.follow_joint_trajectory(drop_to_home)
+    print("SUCCESS!!!")
 
 else:
     args = parser.parse_args('')  # get default arguments
