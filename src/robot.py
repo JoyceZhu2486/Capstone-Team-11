@@ -352,11 +352,11 @@ class Robot:
             jacobian = self.jacobian(current_joints)[:, :, -1]
             
             # Compute the pseudo-inverse of the Jacobian
-            jac_pinv = np.linalg.pinv(jac)
+            jac_pinv = np.linalg.pinv(jacobian)
             # Update the joint angles based on the pseudo-inverse and the current error
             joint_update = step_size * jac_pinv @ total_error
             current_joints += joint_update
-            
+
          # If we exit the loop, no solution was found within the given iteration limit
         return None
         # --------------- END STUDENT SECTION ----------------
