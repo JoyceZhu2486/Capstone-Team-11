@@ -330,6 +330,8 @@ class Robot:
         max_iterations = TaskConfig.IK_MAX_ITERATIONS
         tolerance = TaskConfig.IK_TOLERANCE
         alpha = 0.05
+        joint_limit_min = RobotConfig.JOINT_LIMITS_MIN
+        joint_limit_max = RobotConfig.JOINT_LIMITS_MAX
         
         current_joints = seed_joints
         for _ in range(max_iterations):
@@ -344,7 +346,7 @@ class Robot:
             rotation_error = R.from_matrix(rotation_error).as_rotvec()
             error = np.hstack((position_error, rotation_error))
             if np.linalg.norm(error) < tolerance:
-                return current_joints
+                return np.clip(current_joints, joint_limit_min, joint_limit_max)
             
             jacobian = self.jacobian(current_joints)[:, :, -1]
             jacobian_pseudo_inverse = np.linalg.pinv(jacobian)

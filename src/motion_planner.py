@@ -24,8 +24,13 @@ class TrajectoryGenerator:
         self.max_acc = RobotConfig.MAX_ACCELERATION
     
     def whiteboard_to_world(self, whiteboard_xyz, whiteboard_matrix):
+        # whiteboard_matrix = np.copy(whiteboard_matrix_original)
         whiteboard_rotation = whiteboard_matrix[:3,:3]
         whiteboard_translation = whiteboard_matrix[:3,3]
+        # whiteboard_correct_xyz = np.copy(whiteboard_xyz)
+        # whiteboard_correct_xyz[0] = -whiteboard_correct_xyz[0]
+        # whiteboard_correct_xyz[1] = whiteboard_correct_xyz[1]
+        # whiteboard_correct_xyz[2] = -whiteboard_correct_xyz[2]
         world_xyz = whiteboard_rotation @ whiteboard_xyz + whiteboard_translation
         return world_xyz
     
@@ -344,8 +349,8 @@ class TrajectoryGenerator:
         """
         if ((q_start == q_end).all()):
             raise ValueError(f"The start point equals end point!")
-        max_vel = 0.5
-        max_acc = 0.5
+        max_vel = 5
+        max_acc = 5
         # Time interval
         dt = 0.02  # 20 ms intervals
         time_steps = np.arange(0, duration + dt, dt)
@@ -462,6 +467,7 @@ class TrajectoryFollower:
         pub.publish(ros_msg)
 
         rospy.loginfo('Done')
+        self.fa.stop_skill()
             
     def follow_cartesian_trajectory(self, pose_trajectory):
         """

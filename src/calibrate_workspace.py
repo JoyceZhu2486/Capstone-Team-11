@@ -5,7 +5,7 @@ from autolab_core import RigidTransform
 class WorkspaceCalibrator:
     def __init__(self):
         self.fa = FrankaArm()
-        self.duration = 10
+        self.duration = 20
         
     def calibrate_pen_holders(self):
         """Calibrate pen holder positions through guided movement"""
@@ -89,10 +89,16 @@ class WorkspaceCalibrator:
 def main():
     calibrator = WorkspaceCalibrator()
     
+    HOMEJOINTS = np.array([-3.91461865e-04, -7.85867822e-01, 1.17114550e-04, -2.35666438e+00,
+        -6.39495011e-04,  1.57148656e+00,  7.85797890e-01])
     # Perform calibration
     pen_positions = calibrator.calibrate_pen_holders()
+    calibrator.fa.goto_joints(HOMEJOINTS)
+    input("Press enter to close gripper")
+    calibrator.fa.close_gripper()
     whiteboard_pose = calibrator.calibrate_whiteboard()
     drop_pose = calibrator.calibrate_drop_location()
+    calibrator.fa.open_gripper()
 
 if __name__ == "__main__":
     main()
