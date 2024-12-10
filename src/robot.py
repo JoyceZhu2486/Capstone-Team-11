@@ -245,7 +245,7 @@ class Robot:
         return jacobians
         # --------------- END STUDENT SECTION --------------------------------------------
     
-    # the analytical jacobian function
+    
     def analy_jacobian (self, thetas):
         """
         Compute the Jacobians for each frame.
@@ -295,7 +295,7 @@ class Robot:
         
         Parameters
         ----------
-        target_pose : 4x4 np.ndarray
+        target_pose : RigidTransform
             Desired end-effector pose
         seed_joints : np.ndarray
             Initial joint configuration
@@ -307,9 +307,11 @@ class Robot:
             
         Hints
         -----
-        - Use get_pose() from robot arm
-        - Implement a helper function to track pose error magnitude for convergence
-        - The iteration parameters are defined in RobotConfig and TaskConfig, feel free to update them
+        - Use get_pose() and get_jacobian() from robot arm
+        - Use _compute_rotation_error() for orientation error
+        - Check joint limits with is_joints_reachable()
+        - Track pose error magnitude for convergence
+        - The iteration parameters are defined in RobotConfig and TaskConfig
         """
         
         if seed_joints.shape[0] != (self.dof):
@@ -317,47 +319,43 @@ class Robot:
         if type(target_pose) == RigidTransform:
             target_matrix = target_pose.matrix
         else:
-            target_matrix = target_pose         
+            target_matrix = target_pose
+            
         
         if seed_joints is None:
             seed_joints = self.robot.arm.get_joints()
         
         # --------------- BEGIN STUDENT SECTION ------------------------------------------------
         # TODO: Implement gradient inverse kinematics
-        # set the joint limits to avoid collision with virtual walls
+        max_iterations = TaskConfig.IK_MAX_ITERATIONS
+        tolerance = TaskConfig.IK_TOLERANCE
+        alpha = 0.05
         joint_limit_min = RobotConfig.JOINT_LIMITS_MIN
         joint_limit_max = RobotConfig.JOINT_LIMITS_MAX
-        max_iter = TaskConfig.IK_max_iter
-
-        error_threshold = TaskConfig.IK_error_threshold
-        step_size = 0.05
-
-        current_joints = np.copy(seed_joints)
-
-        for _ in range(max_iter):
-            # Compute the forward kinematics to find the end-effector pose for the current joint configuration
-            current_fk = self.forward_kinematics(current_joints)
-            # Calculate the difference between desired and current pose
-            pose_diff = target_matrix - current_fk[...,-1]
-            # Extract position error from the translation component
-            xyz_error = pose_diff[:3, 3]
-
-            rot_diff = target_matrix[:3,:3] @ current_fk[...,-1][:3,:3].T 
-            rot_diff = R.from_matrix(rot_diff).as_rotvec()
-
-            total_error = np.concatenate((xyz_error, rot_diff))
-            if np.linalg.norm(total_error) < error_threshold:
-                return np.clip(current_joints, 1.1*joint_limit_min, 0.9*joint_limit_max)
+        
+        current_joints = seed_joints
+        for _ in range(max_iterations):
+            current_pose = self.forward_kinematics(current_joints)
+            pose_error = target_matrix - current_pose[...,-1]
+            position_error = pose_error[:3, 3]
+            # print((target_pose.rotation - current_pose[:3, :3]).flatten())
+            #rotation_error = self._compute_rotation_error(target_pose.rotation, current_pose[:3, :3])
+            # rotation_error = self._rotation_to_quaternion(target_pose.rotation)[1:] - self._rotation_to_quaternion(current_pose[:3, :3])[1:]
+            # print(target_matrix)
+            rotation_error = (target_matrix[:3,:3]) @ current_pose[...,-1][:3,:3].T 
+            rotation_error = R.from_matrix(rotation_error).as_rotvec()
+            error = np.hstack((position_error, rotation_error))
+            if np.linalg.norm(error) < tolerance:
+                return np.clip(current_joints, joint_limit_min, joint_limit_max)
             
             jacobian = self.jacobian(current_joints)[:, :, -1]
+            jacobian_pseudo_inverse = np.linalg.pinv(jacobian)
+            delta_joints = alpha * jacobian_pseudo_inverse @ error
+            current_joints += delta_joints
             
-            # Compute the pseudo-inverse of the Jacobian
-            jac_pinv = np.linalg.pinv(jacobian)
-            # Update the joint angles based on the pseudo-inverse and the current error
-            joint_update = step_size * jac_pinv @ total_error
-            current_joints += joint_update
-
-         # If we exit the loop, no solution was found within the given iteration limit
+            # if not self.is_joints_reachable(current_joints):
+            #     return None
+        
         return None
         # --------------- END STUDENT SECTION ----------------
 
@@ -391,4 +389,5 @@ class Robot:
                 qy = (R[1,2] + R[2,1]) / S
                 qz = 0.25 * S
         return np.array([qw, qx, qy, qz])
+
 
